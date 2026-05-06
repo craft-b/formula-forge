@@ -26,7 +26,12 @@ function App() {
             A multi-agent system that compresses early-stage R&D scoping for clinical and medical food — renal-diet, dysphagia-safe, oncology-targeted, and post-surgical formulations.
           </p>
           <div className="flex gap-3">
-            <Button>View on GitHub</Button>
+            <Button>
+              <a href="https://github.com/craft-b/formulaforge" target="_blank">
+
+              View on GitHub
+              </a>
+</Button>
             <Button variant="outline">Read the build journal</Button>
           </div>
         </div>
