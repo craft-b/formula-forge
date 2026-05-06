@@ -1,45 +1,24 @@
-# === Python ===
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-.venv/
-venv/
-env/
-ENV/
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# === Node / Frontend ===
-node_modules/
-.next/
-dist/
-build/
+# Logs
+logs
 *.log
-.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# === Environment / Secrets ===
-.env
-.env.local
-.env.*.local
-*.key
-*.pem
+node_modules
+dist
+dist-ssr
+*.local
 
-# === IDE ===
-.vscode/
-.idea/
-*.swp
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
 .DS_Store
-Thumbs.db
-
-# === LangSmith / Local data ===
-.langgraph/
-chroma_db/
-*.sqlite
-*.db
-
-# === OS ===
-desktop.ini
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
