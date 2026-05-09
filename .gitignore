@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 .env.local
 .env 
+backend/chroma_db/
+backend/data/
