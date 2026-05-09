@@ -1,12 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from langchain_core.messages import HumanMessage
+from graph import agent
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten this later
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -23,5 +25,8 @@ def health():
 
 @app.post("/api/chat")
 def chat(req: ChatRequest):
-    # Day 4: replace this with LangGraph call
-    return ChatResponse(response=f"Echo: {req.message}")
+    result = agent.invoke({
+        "messages": [HumanMessage(content=req.message)]
+    })
+    final = result["messages"][-1].content
+    return ChatResponse(response=final)
