@@ -1,35 +1,29 @@
-from dotenv import load_dotenv
-load_dotenv()
+import os
+import pandas as pd
+import chromadb
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from langchain_core.messages import HumanMessage
-from graph import agent
+def ensure_db_populated():
+    client = chromadb.PersistentClient(path="./chroma_db")
+    collection = client.get_or_create_collection(name="usda_foods")
+    if collection.count() == 0:
+        print("ChromaDB empty — ingesting USDA data...")
+        # For Render: use a small hardcoded sample since CSV won't be there
+        sample_foods = [
+            "Chicken, broilers or fryers, breast, meat only, cooked, roasted",
+            "Beef, ground, 90% lean meat / 10% fat, patty, cooked, broiled",
+            "Salmon, Atlantic, farmed, cooked, dry heat",
+            "Egg, whole, cooked, hard-boiled",
+            "Lentils, mature seeds, cooked, boiled, without salt",
+            "Quinoa, cooked",
+            "Almonds, dry roasted, without salt added",
+            "Broccoli, cooked, boiled, drained, without salt",
+            "Sweet potato, cooked, baked in skin, without salt",
+            "Greek yogurt, plain, nonfat"
+        ]
+        collection.add(
+            documents=sample_foods,
+            ids=[str(i) for i in range(len(sample_foods))]
+        )
+        print(f"Ingested {len(sample_foods)} seed foods")
 
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-class ChatRequest(BaseModel):
-    message: str
-
-class ChatResponse(BaseModel):
-    response: str
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-@app.post("/api/chat")
-def chat(req: ChatRequest):
-    result = agent.invoke({
-        "messages": [HumanMessage(content=req.message)]
-    })
-    final = result["messages"][-1].content
-    return ChatResponse(response=final)
+ensure_db_populated()

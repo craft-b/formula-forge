@@ -1,6 +1,11 @@
+import chromadb
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, AIMessage
 from typing import TypedDict, List
+
+# Load ChromaDB
+chroma_client = chromadb.PersistentClient(path="./chroma_db")
+collection = chroma_client.get_or_create_collection(name="usda_foods")
 
 class AgentState(TypedDict):
     messages: List
@@ -8,22 +13,37 @@ class AgentState(TypedDict):
 def orchestrator(state: AgentState):
     last_message = state["messages"][-1].content
     return {"messages": state["messages"] + [
-        AIMessage(content=f"Orchestrator received: {last_message}")
+        AIMessage(content=f"Looking up: {last_message}")
     ]}
 
-def echo_agent(state: AgentState):
-    last_message = state["messages"][-1].content
+def rag_agent(state: AgentState):
+    # Get the original user question
+    user_message = state["messages"][0].content
+    
+    # Query ChromaDB
+    results = collection.query(
+        query_texts=[user_message],
+        n_results=5
+    )
+    
+    # Format results
+    foods = results["documents"][0]
+    if foods:
+        response = "Here are related foods from USDA FoodData:\n" + "\n".join(f"• {f}" for f in foods)
+    else:
+        response = "No matching foods found."
+    
     return {"messages": state["messages"] + [
-        AIMessage(content=f"Echo Agent says: {last_message}")
+        AIMessage(content=response)
     ]}
 
 def build_graph():
     graph = StateGraph(AgentState)
     graph.add_node("orchestrator", orchestrator)
-    graph.add_node("echo_agent", echo_agent)
+    graph.add_node("rag_agent", rag_agent)
     graph.set_entry_point("orchestrator")
-    graph.add_edge("orchestrator", "echo_agent")
-    graph.add_edge("echo_agent", END)
+    graph.add_edge("orchestrator", "rag_agent")
+    graph.add_edge("rag_agent", END)
     return graph.compile()
 
 agent = build_graph()
