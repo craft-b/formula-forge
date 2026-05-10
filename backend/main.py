@@ -9,27 +9,31 @@ from pydantic import BaseModel
 
 def _seed_chroma():
     import chromadb
+    import json
+    import os
+
     client = chromadb.PersistentClient(path="./chroma_db")
     collection = client.get_or_create_collection(name="usda_foods")
+
     if collection.count() == 0:
-        print("ChromaDB empty — seeding sample foods...")
-        sample_foods = [
-            "Chicken, broilers or fryers, breast, meat only, cooked, roasted",
-            "Beef, ground, 90% lean meat / 10% fat, patty, cooked, broiled",
-            "Salmon, Atlantic, farmed, cooked, dry heat",
-            "Egg, whole, cooked, hard-boiled",
-            "Lentils, mature seeds, cooked, boiled, without salt",
-            "Quinoa, cooked",
-            "Almonds, dry roasted, without salt added",
-            "Broccoli, cooked, boiled, drained, without salt",
-            "Sweet potato, cooked, baked in skin, without salt",
-            "Greek yogurt, plain, nonfat",
-        ]
-        collection.add(
-            documents=sample_foods,
-            ids=[str(i) for i in range(len(sample_foods))],
-        )
-        print(f"Seeded {len(sample_foods)} foods into ChromaDB")
+        print("ChromaDB empty — loading USDA data from JSON...")
+        json_path = os.path.join(os.path.dirname(__file__), "usda_foods.json")
+        with open(json_path, "r") as f:
+            foods = json.load(f)
+
+        documents = [food["description"] for food in foods]
+        ids = [str(food["fdc_id"]) for food in foods]
+
+        batch_size = 100
+        total_batches = (len(documents) + batch_size - 1) // batch_size
+        for i in range(0, len(documents), batch_size):
+            collection.add(
+                documents=documents[i:i + batch_size],
+                ids=ids[i:i + batch_size],
+            )
+            print(f"Ingested batch {i // batch_size + 1}/{total_batches}")
+
+        print(f"Seeded {len(documents)} foods into ChromaDB")
     else:
         print(f"ChromaDB ready — {collection.count()} foods loaded")
 
