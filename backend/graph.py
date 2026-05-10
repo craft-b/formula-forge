@@ -1,40 +1,49 @@
 import chromadb
 from langgraph.graph import StateGraph, END
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from llm import get_llm
 from typing import TypedDict, List
 
 # Load ChromaDB
 chroma_client = chromadb.PersistentClient(path="./chroma_db")
 collection = chroma_client.get_or_create_collection(name="usda_foods")
 
+# Load LLM via swap layer
+llm = get_llm()
+
 class AgentState(TypedDict):
     messages: List
 
 def orchestrator(state: AgentState):
-    last_message = state["messages"][-1].content
-    return {"messages": state["messages"] + [
-        AIMessage(content=f"Looking up: {last_message}")
-    ]}
+    return {"messages": state["messages"]}
 
 def rag_agent(state: AgentState):
-    # Get the original user question
     user_message = state["messages"][0].content
-    
+
     # Query ChromaDB
     results = collection.query(
         query_texts=[user_message],
         n_results=5
     )
-    
-    # Format results
     foods = results["documents"][0]
-    if foods:
-        response = "Here are related foods from USDA FoodData:\n" + "\n".join(f"• {f}" for f in foods)
-    else:
-        response = "No matching foods found."
-    
+    context = "\n".join(f"- {f}" for f in foods)
+
+    # Build prompt
+    system = SystemMessage(content="""You are FormulaForge, an AI food formulation assistant.
+You help food scientists, chefs, and product developers with ingredient selection,
+nutrition analysis, and recipe formulation. Be concise, specific, and practical.""")
+
+    prompt = HumanMessage(content=f"""User question: {user_message}
+
+Relevant USDA foods found:
+{context}
+
+Based on these ingredients, provide a helpful, specific answer.""")
+
+    response = llm.invoke([system, prompt])
+
     return {"messages": state["messages"] + [
-        AIMessage(content=response)
+        AIMessage(content=response.content)
     ]}
 
 def build_graph():
