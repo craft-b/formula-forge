@@ -11,8 +11,16 @@ def _seed_chroma():
     import chromadb
     import json
     import os
+    import shutil
+
+    # Clear corrupted ONNX cache if it exists
+    cache_path = "/opt/render/.cache/chroma/onnx_models"
+    if os.path.exists(cache_path):
+        shutil.rmtree(cache_path)
+        print("Cleared ONNX cache — will re-download fresh")
 
     client = chromadb.PersistentClient(path="./chroma_db")
+
     collection = client.get_or_create_collection(name="usda_foods")
 
     if collection.count() == 0:
