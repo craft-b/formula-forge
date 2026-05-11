@@ -1,4 +1,3 @@
-import chromadb
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from llm import get_llm
