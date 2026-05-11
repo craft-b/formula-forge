@@ -8,3 +8,4 @@ langsmith
 chromadb
 pandas
 langchain-groq
+sentence-transformers

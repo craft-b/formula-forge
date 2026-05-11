@@ -11,17 +11,16 @@ def _seed_chroma():
     import chromadb
     import json
     import os
-    import shutil
-
-    # Clear corrupted ONNX cache if it exists
-    cache_path = "/opt/render/.cache/chroma/onnx_models"
-    if os.path.exists(cache_path):
-        shutil.rmtree(cache_path)
-        print("Cleared ONNX cache — will re-download fresh")
+    from chromadb.utils import embedding_functions
 
     client = chromadb.PersistentClient(path="./chroma_db")
-
-    collection = client.get_or_create_collection(name="usda_foods")
+    ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+        model_name="all-MiniLM-L6-v2"
+    )
+    collection = client.get_or_create_collection(
+        name="usda_foods",
+        embedding_function=ef,
+    )
 
     if collection.count() == 0:
         print("ChromaDB empty — loading USDA data from JSON...")

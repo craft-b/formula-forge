@@ -1,4 +1,5 @@
 import chromadb
+from chromadb.utils import embedding_functions
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from llm import get_llm
@@ -6,7 +7,13 @@ from typing import TypedDict, List
 
 # Load ChromaDB
 chroma_client = chromadb.PersistentClient(path="./chroma_db")
-collection = chroma_client.get_or_create_collection(name="usda_foods")
+ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+    model_name="all-MiniLM-L6-v2"
+)
+collection = chroma_client.get_or_create_collection(
+    name="usda_foods",
+    embedding_function=ef,
+)
 
 # Load LLM via swap layer
 llm = get_llm()
