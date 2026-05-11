@@ -30,24 +30,25 @@ def orchestrator(state: AgentState):
     return {"messages": state["messages"]}
 
 def rag_agent(state: AgentState):
-    user_message = state["messages"][0].content
+    user_messages = [m for m in state["messages"] if isinstance(m, HumanMessage)]
+    user_message = user_messages[-1].content
+
     foods = search_foods(user_message)
-    
-    if not foods:
-        context = "No matching foods found in USDA database."
-    else:
-        context = "\n".join(f"- {f}" for f in foods)
+    context = "\n".join(f"- {f}" for f in foods) if foods else "No matching foods found in USDA database."
 
     system = SystemMessage(content="""You are FormulaForge, an AI food formulation assistant.
 You help food scientists, chefs, and product developers with ingredient selection,
-nutrition analysis, and recipe formulation. Be concise, specific, and practical.""")
+nutrition analysis, and recipe formulation. Be concise, specific, and practical.
+You have memory of the conversation history — reference it when relevant.""")
 
-    prompt = HumanMessage(content=f"""User question: {user_message}
+    prompt = HumanMessage(content=f"""Conversation so far: {len(state["messages"])} messages.
+
+User question: {user_message}
 
 Relevant USDA foods found:
 {context}
 
-Based on these ingredients, provide a helpful, specific answer.""")
+Provide a helpful, specific answer.""")
 
     response = llm.invoke([system, prompt])
     return {"messages": state["messages"] + [AIMessage(content=response.content)]}

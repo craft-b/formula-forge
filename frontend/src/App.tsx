@@ -7,6 +7,7 @@ function App() {
   const [input, setInput] = useState("")
   const [response, setResponse] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [sessionId, setSessionId] = useState<string | null>(null)
 
   async function handleSend() {
     if (!input.trim()) return
@@ -16,10 +17,11 @@ function App() {
       const res = await fetch(`${API_URL}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: input }),
+        body: JSON.stringify({ message: input, session_id: sessionId }),
       })
       const data = await res.json()
       console.log("API response:", data)
+      setSessionId(data.session_id)
       setResponse(data.response)
     } catch (err) {
       console.error("API error:", err)
