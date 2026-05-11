@@ -1,59 +1,8 @@
-import asyncio
-from contextlib import asynccontextmanager
-from concurrent.futures import ThreadPoolExecutor
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-
-def _seed_chroma():
-    import chromadb
-    import json
-    import os
-    from chromadb.utils import embedding_functions
-
-    client = chromadb.PersistentClient(path="./chroma_db")
-    ef = embedding_functions.SentenceTransformerEmbeddingFunction(
-        model_name="all-MiniLM-L6-v2"
-    )
-    collection = client.get_or_create_collection(
-        name="usda_foods",
-        embedding_function=ef,
-    )
-
-    if collection.count() == 0:
-        print("ChromaDB empty — loading USDA data from JSON...")
-        json_path = os.path.join(os.path.dirname(__file__), "usda_foods.json")
-        with open(json_path, "r") as f:
-            foods = json.load(f)
-
-        documents = [food["description"] for food in foods]
-        ids = [str(food["fdc_id"]) for food in foods]
-
-        batch_size = 100
-        total_batches = (len(documents) + batch_size - 1) // batch_size
-        for i in range(0, len(documents), batch_size):
-            collection.add(
-                documents=documents[i:i + batch_size],
-                ids=ids[i:i + batch_size],
-            )
-            print(f"Ingested batch {i // batch_size + 1}/{total_batches}")
-
-        print(f"Seeded {len(documents)} foods into ChromaDB")
-    else:
-        print(f"ChromaDB ready — {collection.count()} foods loaded")
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    loop = asyncio.get_event_loop()
-    executor = ThreadPoolExecutor(max_workers=1)
-    loop.run_in_executor(executor, _seed_chroma)
-    yield
-
-
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,

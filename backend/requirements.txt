@@ -5,7 +5,5 @@ pydantic
 langchain-core
 langgraph
 langsmith
-chromadb
 pandas
 langchain-groq
-sentence-transformers
