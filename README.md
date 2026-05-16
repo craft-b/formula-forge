@@ -125,4 +125,4 @@ formula-forge/
 Bobby Craft — building in public, 8 weeks, $0 budget.
 
 <!-- TODO: replace with your actual LinkedIn URL -->
-[LinkedIn](https://linkedin.com/in/yourhandle) · [GitHub](https://github.com/craft-b/formula-forge)
+[LinkedIn](https://linkedin.com/in/craft-bobby-5739b6) · [GitHub](https://github.com/craft-b/formula-forge)
