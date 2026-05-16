@@ -16,24 +16,7 @@ A food scientist types a request. The agent detects formulation intent, queries 
 
 **Example query:** *"Create a formula for a high-protein renal-diet shake"*
 
-```
-<!-- TODO: replace with a real FormulaForge output from an actual session -->
-Product: High-Protein Renal-Diet Shake
-Description: Low-potassium, low-phosphorus protein supplement for CKD patients
-
-Ingredients:
-  Whey protein isolate      38%   Low-phosphorus protein source
-  Rice starch               28%   Neutral, low-mineral carbohydrate base
-  Medium-chain triglycerides 18%  Dense calorie source, minimal renal load
-  Sunflower oil              8%   Essential fatty acids
-  Calcium caseinate          5%   Slow-release protein, phosphate-managed
-  Sucrose                    3%   Palatability
-
-Nutrition per 100g: 420 kcal | 32g protein | 18g fat | 42g carbs
-
-Formulation notes: Verify phosphorus content against KDOQI guidelines.
-Target osmolality ≤450 mOsm/kg. Shelf life 18 months with N₂ flush.
-```
+<img width="479" height="491" alt="image" src="https://github.com/user-attachments/assets/a767f0a6-9b42-41e6-9e2f-d183573b838b" />
 
 ---
 
