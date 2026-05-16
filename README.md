@@ -1,73 +1,145 @@
-# React + TypeScript + Vite
+# FormulaForge
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**AI-powered food formulation assistant for clinical and medical nutrition R&D.**
 
-Currently, two official plugins are available:
+[![Backend health](https://img.shields.io/badge/API-live-brightgreen)](https://formula-forge-qye9.onrender.com/health)
+[![Frontend](https://img.shields.io/badge/App-Vercel-black)](https://formula-forge-chi.vercel.app)
+[![Built in public](https://img.shields.io/badge/built_in_public-8_weeks-teal)]()
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## What it does
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+FormulaForge compresses early-stage R&D scoping for clinical and medical food products — renal-diet, dysphagia-safe, oncology-targeted, and post-surgical formulations.
 
-## Expanding the ESLint configuration
+A food scientist types a request. The agent detects formulation intent, queries 1,000 USDA Foundation Foods, and returns either a structured formula with ingredient percentages and estimated nutrition, or a targeted ingredient/regulatory answer — all inside a single chat session with memory.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+**Example query:** *"Create a formula for a high-protein renal-diet shake"*
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+```
+<!-- TODO: replace with a real FormulaForge output from an actual session -->
+Product: High-Protein Renal-Diet Shake
+Description: Low-potassium, low-phosphorus protein supplement for CKD patients
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Ingredients:
+  Whey protein isolate      38%   Low-phosphorus protein source
+  Rice starch               28%   Neutral, low-mineral carbohydrate base
+  Medium-chain triglycerides 18%  Dense calorie source, minimal renal load
+  Sunflower oil              8%   Essential fatty acids
+  Calcium caseinate          5%   Slow-release protein, phosphate-managed
+  Sucrose                    3%   Palatability
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Nutrition per 100g: 420 kcal | 32g protein | 18g fat | 42g carbs
+
+Formulation notes: Verify phosphorus content against KDOQI guidelines.
+Target osmolality ≤450 mOsm/kg. Shelf life 18 months with N₂ flush.
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Architecture
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
+POST /api/chat
+      │
+      ▼
+  main.py  ── session_id → conversation_store (in-memory history)
+      │
+      ▼
+  LangGraph
+      │
+  orchestrator
+  detect_intent(message)
+      │
+      ├─── "formulate" ──► formula_agent
+      │                        │
+      │                    search_foods()   ← USDA JSON keyword match
+      │                        │
+      │                    Groq Llama 3.3 70B
+      │                        │
+      │                    structured JSON formula
+      │
+      └─── "search"  ──►  rag_agent
+                               │
+                           search_foods()   ← USDA JSON keyword match
+                               │
+                           Groq Llama 3.3 70B + message history
+                               │
+                           text response
+      │
+      ▼
+  main.py  ── parse formula JSON → ChatResponse{response, formula, session_id}
+      │
+      ▼
+  React frontend  ── formula? render FormulaCard : render text bubble
+```
+
+### Key design decisions
+
+| Decision | What we did | Why |
+|---|---|---|
+| Embeddings | Keyword scoring over USDA JSON | No ONNX/model download on Render free tier — cold starts killed the service |
+| LLM routing | `detect_intent()` trigger phrases, not an LLM call | Avoids extra latency and token cost on every message |
+| LLM abstraction | `llm.py` provider swap layer | Swap Groq → OpenAI → Anthropic via env var with zero graph changes |
+| Session memory | In-memory `dict` keyed by `session_id` | Free tier has no persistent storage; good enough for single-session use |
+| Formula structure | LLM returns raw JSON, `main.py` parses and validates | Keeps graph.py stateless; frontend gets a typed object, not a string to parse |
+
+---
+
+## Stack
+
+| Layer | Tech |
+|---|---|
+| Frontend | React 19 + TypeScript + Vite + Tailwind v4 + shadcn/ui (Nova) |
+| Backend | FastAPI + LangGraph + langchain-groq |
+| LLM | Groq — Llama 3.3 70B Versatile |
+| Data | USDA FoodData Central Foundation Foods (1,000 foods as JSON) |
+| Hosting | Vercel (frontend) + Render (backend) |
+
+---
+
+## Local setup
+
+**Backend**
+```bash
+cd backend
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env   # add your GROQ_API_KEY
+uvicorn main:app --reload
+```
+
+**Frontend**
+```bash
+cd frontend
+npm install
+# create frontend/.env.local with: VITE_API_URL=http://localhost:8000
+npm run dev
+```
+
+---
+
+## Project structure
+
+```
+formula-forge/
+├── backend/
+│   ├── main.py          # FastAPI app, session store, formula JSON parsing
+│   ├── graph.py         # LangGraph — orchestrator, rag_agent, formula_agent
+│   ├── llm.py           # Provider swap layer (Groq / OpenAI / Anthropic)
+│   ├── usda_foods.json  # 1,000-row USDA Foundation Foods dataset
+│   ├── requirements.txt
+│   └── .env.example
+└── frontend/
+    └── src/
+        └── App.tsx      # Chat UI, FormulaCard, session management
+```
+
+---
+
+## Built by
+
+Bobby Craft — building in public, 8 weeks, $0 budget.
+
+<!-- TODO: replace with your actual LinkedIn URL -->
+[LinkedIn](https://linkedin.com/in/yourhandle) · [GitHub](https://github.com/craft-b/formula-forge)
