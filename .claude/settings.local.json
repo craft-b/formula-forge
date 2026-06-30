@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(git filter-branch *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(python prep_data.py)"
     ]
   }
 }

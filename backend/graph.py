@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from typing import Literal, TypedDict, List
 
 from langgraph.graph import StateGraph, END
@@ -12,13 +13,20 @@ with open(json_path, "r") as f:
 
 llm = get_llm()
 
-FORMULATION_TRIGGERS = [
-    "create a formula", "create formula", "formulate a", "formulate an",
-    "build a formula", "build a recipe", "make a formula", "make a recipe",
-    "generate a formula", "design a formula", "develop a formula",
-    "create a product", "make a product", "new formula", "formula for",
-    "recipe for", "i need a formula", "can you formulate",
-]
+# Compiled once at import time. Matches formulation intent across verb conjugations
+# and natural phrasing variants that the old substring list missed, e.g.:
+#   "let me formulate", "I need you to formulate a shake",
+#   "build me an oncology formula", "can we develop a new recipe for..."
+_FORMULATION_RE = re.compile(
+    r"\b(?:"
+    r"formulate[sd]?|formulating"
+    r"|(?:create|build|make|generate|design|develop|draft)\s+(?:me\s+)?an?(?:\s+[\w-]+){0,4}\s+(?:formula|formulation|recipe|product)"
+    r"|new\s+(?:formula|formulation|recipe)"
+    r"|(?:formula|recipe)\s+for\b"
+    r"|i\s+need\s+a\s+formula"
+    r")",
+    re.IGNORECASE,
+)
 
 
 class AgentState(TypedDict):
@@ -26,14 +34,25 @@ class AgentState(TypedDict):
 
 
 def detect_intent(message: str) -> Literal["formulate", "search"]:
-    msg = message.lower()
-    for trigger in FORMULATION_TRIGGERS:
-        if trigger in msg:
-            return "formulate"
-    return "search"
+    """Return routing intent for a user message.
+
+    Uses regex rather than an LLM call deliberately: routing is a deterministic
+    pattern-match problem, and adding an LLM hop here would cost ~300ms and one
+    extra API call on every single message. The regex covers conjugations and
+    natural variants the old substring list missed (see _FORMULATION_RE above).
+    """
+    return "formulate" if _FORMULATION_RE.search(message) else "search"
 
 
 def search_foods(query: str, n: int = 8) -> List[str]:
+    """Score USDA foods by keyword overlap with the query and return the top n.
+
+    Chosen over vector embeddings because Render's free tier cannot run an
+    ONNX embedding model — the cold-start memory spike killed the service.
+    Known limitations: no stemming ("proteins" won't match "protein"), no
+    bigram matching, no field weighting. Good enough for the 1,000-food
+    Foundation Foods dataset where descriptions are short and specific.
+    """
     query_words = [w for w in query.lower().split() if len(w) > 2]
     scored = []
     for food in FOODS:
@@ -57,6 +76,13 @@ def route(state: AgentState) -> Literal["formula_agent", "rag_agent"]:
 
 
 def rag_agent(state: AgentState):
+    """Handle ingredient and nutrition questions with USDA context + conversation history.
+
+    Passes the last 10 messages to the LLM so follow-up questions ("what about
+    the sodium content?") resolve correctly. The window is capped at 10 to stay
+    within Groq's context limits and avoid paying for tokens from very old turns
+    that are unlikely to be relevant.
+    """
     user_messages = [m for m in state["messages"] if isinstance(m, HumanMessage)]
     user_message = user_messages[-1].content
     foods = search_foods(user_message)
@@ -76,6 +102,18 @@ Reference conversation history when relevant.""")
 
 
 def formula_agent(state: AgentState):
+    """Generate a structured food formula as a JSON object.
+
+    Deliberately does not pass conversation history to the LLM. Formula
+    generation needs a clean, tightly-constrained prompt to reliably produce
+    valid JSON — injecting multi-turn history increases the chance the model
+    breaks the JSON contract or mixes in prior context. The tradeoff is that
+    follow-up reformulation requests ("now make it dairy-free") require the
+    user to re-state the base product; this is acceptable for the current scope.
+
+    The JSON schema is enforced by the prompt. main.py parses and validates
+    the output so graph.py stays stateless and the API response is always typed.
+    """
     user_messages = [m for m in state["messages"] if isinstance(m, HumanMessage)]
     user_message = user_messages[-1].content
     foods = search_foods(user_message, n=10)
@@ -128,6 +166,14 @@ Requirements:
 
 
 def build_graph():
+    """Compile and return the LangGraph agent.
+
+    Graph topology: orchestrator → [route] → formula_agent | rag_agent → END.
+    The orchestrator node is a deliberate pass-through reserved for future
+    input preprocessing (e.g., PII scrubbing, rate-limit checks at graph level)
+    without needing to rewire the conditional edge. compile() freezes the graph
+    so it can be invoked concurrently without shared mutable state.
+    """
     graph = StateGraph(AgentState)
     graph.add_node("orchestrator", orchestrator)
     graph.add_node("rag_agent", rag_agent)

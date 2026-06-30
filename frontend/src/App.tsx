@@ -193,23 +193,81 @@ export default function App() {
     setInput("")
     setMessages((prev) => [...prev, { role: "user", content: text }])
     setLoading(true)
+
+    let hasAssistantMessage = false
+
     try {
       const res = await fetch(`${API_URL}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text, session_id: sessionId }),
       })
-      const data = await res.json()
-      setSessionId(data.session_id)
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.response, formula: data.formula ?? undefined },
-      ])
+
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split("\n\n")
+        buffer = parts.pop() ?? ""
+
+        for (const part of parts) {
+          if (!part.startsWith("data: ")) continue
+          const payload = part.slice(6)
+          if (payload === "[DONE]") break
+
+          let event: Record<string, unknown>
+          try { event = JSON.parse(payload) } catch { continue }
+
+          if (event.type === "token") {
+            const content = event.content as string
+            if (!hasAssistantMessage) {
+              hasAssistantMessage = true
+              setMessages((prev) => [...prev, { role: "assistant", content }])
+            } else {
+              setMessages((prev) => {
+                const msgs = [...prev]
+                const last = msgs[msgs.length - 1]
+                if (last.role === "assistant") {
+                  msgs[msgs.length - 1] = { ...last, content: last.content + content }
+                }
+                return msgs
+              })
+            }
+          } else if (event.type === "formula") {
+            hasAssistantMessage = true
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                content: event.response as string,
+                formula: event.formula as Formula,
+              },
+            ])
+          } else if (event.type === "error") {
+            hasAssistantMessage = true
+            setMessages((prev) => [
+              ...prev,
+              { role: "assistant", content: event.message as string },
+            ])
+          } else if (event.type === "done") {
+            setSessionId(event.session_id as string)
+          }
+        }
+      }
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Could not reach the server — check your connection." },
-      ])
+      if (!hasAssistantMessage) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "Could not reach the server — check your connection." },
+        ])
+      }
     } finally {
       setLoading(false)
     }
@@ -290,7 +348,7 @@ export default function App() {
               {messages.map((msg, i) => (
                 <MessageBubble key={i} message={msg} />
               ))}
-              {loading && <TypingIndicator />}
+              {loading && messages[messages.length - 1]?.role === "user" && <TypingIndicator />}
               <div ref={bottomRef} />
             </div>
           )}

@@ -1,18 +1,35 @@
 # FormulaForge
 
-**AI-powered food formulation assistant for clinical and medical nutrition R&D.**
+FormulaForge was built by a food scientist and process engineer with 26 years of CPG R&D
+experience — Post Cereals, Magnum Ice Cream (Unilever), Talenti, and Breyers — because
+that career made one thing clear: early-stage product scoping in clinical and medical
+nutrition wastes weeks on questions a trained formulator can answer in minutes. This system
+compresses that cycle using a LangGraph agent, Groq Llama 3.3 70B, and 1,000 USDA
+Foundation Foods.
 
-[![Backend health](https://img.shields.io/badge/API-live-brightgreen)](https://formula-forge-qye9.onrender.com/health)
+**[→ Try the live demo](https://formula-forge-chi.vercel.app)**
+
+[![API Status](https://img.shields.io/badge/API-live-brightgreen)](https://formula-forge-qye9.onrender.com/health)
 [![Frontend](https://img.shields.io/badge/App-Vercel-black)](https://formula-forge-chi.vercel.app)
-[![Built in public](https://img.shields.io/badge/built_in_public-8_weeks-teal)]()
+[![Python](https://img.shields.io/badge/Python-3.11-blue)]()
+[![LangGraph](https://img.shields.io/badge/LangGraph-agentic-orange)]()
 
 ---
 
 ## What it does
 
-FormulaForge compresses early-stage R&D scoping for clinical and medical food products — renal-diet, dysphagia-safe, oncology-targeted, and post-surgical formulations.
+FormulaForge targets the early-stage scoping problem in clinical and medical nutrition:
+renal-diet, dysphagia-safe, oncology-targeted, and post-surgical formulations. A food
+scientist types a request. The agent detects formulation intent, queries 1,000 USDA
+Foundation Foods, and returns either a structured formula with ingredient percentages and
+estimated nutrition, or a targeted ingredient or regulatory answer — all inside a single
+chat session with persistent conversation memory.
 
-A food scientist types a request. The agent detects formulation intent, queries 1,000 USDA Foundation Foods, and returns either a structured formula with ingredient percentages and estimated nutrition, or a targeted ingredient/regulatory answer — all inside a single chat session with memory.
+The formulation outputs are domain-accurate because the system was designed by someone who
+has built these products at scale. The prompts reflect real constraint hierarchies:
+phosphorus limits before protein targets in renal diet, osmolality bounds in tube feeds,
+IDDSI compliance categories for dysphagia. That context is not in the USDA database — it
+comes from the engineer who built the system.
 
 **Example query:** *"Create a formula for a high-protein renal-diet shake"*
 
@@ -120,9 +137,14 @@ formula-forge/
 
 ---
 
-## Built by
+## About
 
-Bobby Craft — building in public, 8 weeks, $0 budget.
+Bobby Craft is a food scientist and process engineer with 26 years of CPG R&D experience
+at Post Cereals, Magnum Ice Cream (Unilever), Talenti, and Breyers. FormulaForge grew out
+of a direct problem: early-stage product development in clinical nutrition requires rapid
+ingredient feasibility assessment that typically takes a team of formulators weeks to
+scope. This project applies agentic AI to compress that process — built to reflect the
+actual constraint hierarchies a clinical nutritionist or product developer works within,
+not a generic LLM wrapper.
 
-<!-- TODO: replace with your actual LinkedIn URL -->
 [LinkedIn](https://linkedin.com/in/craft-bobby-5739b6) · [GitHub](https://github.com/craft-b/formula-forge)
