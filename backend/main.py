@@ -7,11 +7,14 @@ from typing import AsyncGenerator, Optional
 
 from cachetools import TTLCache
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel, Field
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 # load_dotenv must run before graph import — graph.py calls get_llm() at module
 # level, which reads GROQ_API_KEY and LangSmith vars from the environment.
@@ -20,8 +23,33 @@ load_dotenv()
 from graph import agent, detect_modules, regenerate_formula
 from domain import CandidateFormula, validate_candidate
 from json_utils import extract_json_block
+from budget import TokenBudget, estimate_tokens
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_origins(raw: str) -> list[str]:
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
+# ── Abuse controls (F4) ───────────────────────────────────────────────────────
+# CORS locked to an explicit allowlist (no wildcard). Override via ALLOWED_ORIGINS.
+ALLOWED_ORIGINS = _parse_origins(os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:5173,http://localhost:3000,https://formula-forge-chi.vercel.app",
+))
+# Per-request rate limit, read at call time so tests can override the module global.
+CHAT_RATE_LIMIT = os.getenv("CHAT_RATE_LIMIT", "30/minute")
+# Daily token budgets (reserve-up-front) — global and per session.
+budget = TokenBudget(
+    global_daily=int(os.getenv("GLOBAL_DAILY_TOKENS", "2000000")),
+    session_daily=int(os.getenv("SESSION_DAILY_TOKENS", "50000")),
+)
+limiter = Limiter(key_func=get_remote_address)
+
+
+def _chat_rate_limit(*args, **kwargs) -> str:
+    return CHAT_RATE_LIMIT
 
 
 def _candidate_from_llm(raw: dict) -> CandidateFormula:
@@ -87,12 +115,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -190,8 +220,19 @@ async def _stream_agent(
 
 
 @app.post("/api/chat")
-async def chat(req: ChatRequest):
+@limiter.limit(_chat_rate_limit)
+async def chat(request: Request, req: ChatRequest):
     session_id = req.session_id or str(uuid.uuid4())
+
+    # Token budget: reserve an estimate up front so a burst cannot overrun.
+    est = estimate_tokens(req.message)
+    if not budget.allow(session_id, est):
+        return JSONResponse(
+            status_code=429,
+            content={"error": "Daily token budget exceeded. Please try again tomorrow."},
+        )
+    budget.record(session_id, est)
+
     history = list(conversation_store.get(session_id, []))
     history.append(HumanMessage(content=req.message))
     active_modules = detect_modules(req.message)
