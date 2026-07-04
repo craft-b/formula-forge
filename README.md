@@ -80,7 +80,7 @@ POST /api/chat
 |---|---|---|
 | Embeddings | Keyword scoring over USDA JSON | No ONNX/model download on Render free tier — cold starts killed the service |
 | LLM routing | `detect_intent()` trigger phrases, not an LLM call | Avoids extra latency and token cost on every message |
-| LLM abstraction | `llm.py` provider swap layer | Swap Groq → OpenAI → Anthropic via env var with zero graph changes |
+| LLM abstraction | `llm.py` ports-and-adapters provider registry | Groq ships as the working default with a fallback model; OpenAI/Anthropic adapters activate when their SDKs are installed — adding a provider is one constructor, no graph changes |
 | Session memory | In-memory `dict` keyed by `session_id` | Free tier has no persistent storage; good enough for single-session use |
 | Formula structure | LLM returns raw JSON, `main.py` parses and validates | Keeps graph.py stateless; frontend gets a typed object, not a string to parse |
 
