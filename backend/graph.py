@@ -1,17 +1,21 @@
 import json
 import os
 import re
-from typing import Literal, TypedDict, List
+from typing import Literal, Optional, TypedDict, List
 
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from llm import get_llm
+from json_utils import extract_json_block
 
 json_path = os.path.join(os.path.dirname(__file__), "usda_foods.json")
 with open(json_path, "r") as f:
     FOODS = json.load(f)
 
 llm = get_llm()
+# Formula generation uses Groq JSON mode so the model must emit a single JSON
+# object (structured-output enforcement, F2/F13). RAG answers use plain `llm`.
+formula_llm = llm.bind(response_format={"type": "json_object"})
 
 # Compiled once at import time. Matches formulation intent across verb conjugations
 # and natural phrasing variants that the old substring list missed, e.g.:
@@ -124,67 +128,92 @@ Reference conversation history when relevant.""")
     return {"messages": state["messages"] + [AIMessage(content=response.content)]}
 
 
-def formula_agent(state: AgentState):
-    """Generate a structured food formula as a JSON object.
+_FORMULA_SYSTEM = SystemMessage(content="""You are FormulaForge, an expert frozen-dessert \
+formulation AI for medical and institutional nutrition. Generate realistic, \
+scientifically-grounded ice cream / frozen-dessert formulas.
 
-    Deliberately does not pass conversation history to the LLM. Formula
-    generation needs a clean, tightly-constrained prompt to reliably produce
-    valid JSON — injecting multi-turn history increases the chance the model
-    breaks the JSON contract or mixes in prior context. The tradeoff is that
-    follow-up reformulation requests ("now make it dairy-free") require the
-    user to re-state the base product; this is acceptable for the current scope.
+You do NOT report nutrition numbers — the system computes all nutrition from a \
+governed ingredient database. Propose only the ingredient structure.
 
-    The JSON schema is enforced by the prompt. main.py parses and validates
-    the output so graph.py stays stateless and the API response is always typed.
+Respond with ONLY a single valid JSON object.""")
+
+
+def _allowed_ingredient_lines() -> str:
+    """Bulleted list of the governed ingredient names the model may choose from.
+
+    Constraining generation to the library (rather than letting the LLM invent
+    ingredients) is what makes every proposal resolvable and therefore
+    verifiable. Imported lazily to keep graph import light.
     """
-    user_messages = [m for m in state["messages"] if isinstance(m, HumanMessage)]
-    user_message = user_messages[-1].content
-    foods = search_foods(user_message, n=10)
-    context = "\n".join(f"- {f}" for f in foods) if foods else "No specific USDA matches — use general food science knowledge."
+    from domain import get_repository
+    return "\n".join(f"- {ing.name}" for ing in get_repository().ingredients)
 
-    system = SystemMessage(content="""You are FormulaForge, an expert food formulation AI.
-Generate realistic, scientifically-grounded food formulas.
-Respond with ONLY a valid JSON object — no markdown, no explanation, no code fences.""")
 
-    prompt = HumanMessage(content=f"""Create a detailed food formula for: {user_message}
+def build_formula_messages(user_message: str, feedback: Optional[str] = None) -> list:
+    """Build the formula-generation prompt (optionally with repair feedback).
 
-Relevant USDA ingredients:
-{context}
+    Deliberately omits conversation history: formula generation needs a clean,
+    tightly-constrained prompt. Nutrition fields are intentionally absent from
+    the requested schema — the domain layer computes them.
+    """
+    allowed = _allowed_ingredient_lines()
+    repair = ""
+    if feedback:
+        repair = (
+            "\n\nYOUR PREVIOUS ATTEMPT WAS REJECTED. Fix these problems and try "
+            f"again:\n{feedback}\n"
+        )
+    prompt = HumanMessage(content=f"""Create a frozen-dessert formula for: {user_message}
 
-Return ONLY this JSON structure with no extra text:
+Choose ingredients ONLY from this governed list (use the names verbatim):
+{allowed}
+
+Return ONLY this JSON structure:
 {{
   "type": "formula",
   "product_name": "...",
   "description": "...",
+  "product_format": "premium | standard | soft_serve | gelato | novelty",
+  "overrun_pct": null,
   "ingredients": [
-    {{"name": "...", "percentage": 0.0, "notes": "..."}}
+    {{"ref": "<exact name from the list>", "percentage": 0.0, "notes": "..."}}
   ],
-  "nutrition_per_100g": {{
-    "calories": 0,
-    "protein": 0.0,
-    "fat": 0.0,
-    "carbs": 0.0
-  }},
   "formulation_notes": "..."
 }}
 
 Requirements:
-- Ingredients must sum to exactly 100%
-- Include 4-8 ingredients with realistic percentages
-- Nutrition values must be realistic estimates
-- Formulation notes should cover processing, shelf life, or regulatory considerations""")
+- Ingredient percentages must sum to 100.
+- Use 4-8 ingredients chosen only from the list above.
+- Do NOT include any nutrition fields — the system computes nutrition.
+- Formulation notes should cover processing, texture, or regulatory considerations.{repair}""")
+    return [_FORMULA_SYSTEM, prompt]
 
-    response = llm.invoke([system, prompt])
 
-    # Strip markdown fences if the LLM added them anyway
-    raw = response.content.strip()
-    if "```" in raw:
-        for block in raw.split("```"):
-            cleaned = block.lstrip("json").strip()
-            if cleaned.startswith("{"):
-                raw = cleaned
-                break
+def _invoke_formula(messages: list) -> str:
+    """Call the JSON-mode LLM and return the extracted JSON string."""
+    response = formula_llm.invoke(messages)
+    return extract_json_block(response.content)
 
+
+def regenerate_formula(user_message: str, feedback: str) -> str:
+    """One repair re-prompt: regenerate a formula given validation feedback.
+
+    Called by the API layer when the first attempt cannot be resolved/validated
+    into a usable formula. Returns raw JSON (still validated downstream).
+    """
+    return _invoke_formula(build_formula_messages(user_message, feedback=feedback))
+
+
+def formula_agent(state: AgentState):
+    """Generate a structured frozen-dessert formula as a JSON object.
+
+    Uses Groq JSON mode and a library-constrained ingredient list so the output
+    reliably parses and resolves. main.py runs the domain validation gate on
+    this output (and may trigger exactly one repair via regenerate_formula).
+    """
+    user_messages = [m for m in state["messages"] if isinstance(m, HumanMessage)]
+    user_message = user_messages[-1].content
+    raw = _invoke_formula(build_formula_messages(user_message))
     return {"messages": state["messages"] + [AIMessage(content=raw)]}
 
 

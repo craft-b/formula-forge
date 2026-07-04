@@ -17,23 +17,11 @@ from pydantic import BaseModel, Field
 # level, which reads GROQ_API_KEY and LangSmith vars from the environment.
 load_dotenv()
 
-from graph import agent, detect_modules
+from graph import agent, detect_modules, regenerate_formula
 from domain import CandidateFormula, validate_candidate
+from json_utils import extract_json_block
 
 logger = logging.getLogger(__name__)
-
-
-def _extract_json_block(text: str) -> str:
-    """Pull the first JSON object out of an LLM response, tolerating code fences."""
-    raw = text.strip()
-    if "```" in raw:
-        for block in raw.split("```"):
-            cleaned = block.strip()
-            if cleaned.lower().startswith("json"):
-                cleaned = cleaned[4:].strip()
-            if cleaned.startswith("{"):
-                return cleaned
-    return raw
 
 
 def _candidate_from_llm(raw: dict) -> CandidateFormula:
@@ -57,6 +45,30 @@ def _candidate_from_llm(raw: dict) -> CandidateFormula:
         ingredients=ingredients,
         formulation_notes=raw.get("formulation_notes", ""),
     )
+
+
+def _parse_and_validate(raw_text: str, active_modules: Optional[list]):
+    """Parse raw LLM text and run it through the domain gate. None on parse failure."""
+    try:
+        raw = json.loads(extract_json_block(raw_text))
+        candidate = _candidate_from_llm(raw)
+        return validate_candidate(candidate, active_modules=active_modules or [])
+    except (json.JSONDecodeError, ValueError) as exc:
+        logger.warning("Formula parse/validation setup failed: %s", exc)
+        return None
+
+
+def _repair_feedback(result) -> str:
+    """Build repair instructions from a failed first attempt for the reprompt."""
+    if result is None:
+        return "The previous response was not valid JSON. Return a single JSON object."
+    parts = [result.reason]
+    if getattr(result, "unresolved_ingredients", None):
+        parts.append("These ingredients are not in the allowed list and must be "
+                     f"replaced: {', '.join(result.unresolved_ingredients)}.")
+    for v in getattr(result, "violations", []):
+        parts.append(v.explanation)
+    return " ".join(parts)
 
 # Keyed by session_id. Evicts sessions older than 1 hour or when cap is reached.
 conversation_store: TTLCache = TTLCache(maxsize=500, ttl=3600)
@@ -138,22 +150,31 @@ async def _stream_agent(
         if is_formula_run and formula_buffer:
             # The validation gate: every formula passes through validate_candidate.
             # There is no path that emits LLM numbers directly to the client.
-            try:
-                raw = json.loads(_extract_json_block(formula_buffer))
-                candidate = _candidate_from_llm(raw)
-                result = validate_candidate(candidate, active_modules=active_modules or [])
-            except (json.JSONDecodeError, ValueError) as exc:
-                logger.warning("Formula parse/validation setup failed: %s", exc)
-                yield f"data: {json.dumps({'type': 'error', 'message': 'The agent did not return a usable formula. Please try rephrasing your request.'})}\n\n"
-                result = None
+            result = _parse_and_validate(formula_buffer, active_modules)
 
-            if result is not None and result.type == "formula":
+            # Exactly one repair re-prompt when the first attempt cannot be turned
+            # into a usable formula (unparseable or rejected). Computable-but-
+            # non-compliant formulas are surfaced flagged, not repaired (v1).
+            if result is None or result.type == "rejection":
+                user_msgs = [m for m in history if isinstance(m, HumanMessage)]
+                user_message = user_msgs[-1].content if user_msgs else ""
+                try:
+                    repaired_raw = regenerate_formula(user_message, _repair_feedback(result))
+                    retry = _parse_and_validate(repaired_raw, active_modules)
+                    if retry is not None and (result is None or retry.type == "formula"):
+                        result = retry
+                except Exception:
+                    logger.exception("Formula repair re-prompt failed for %s", session_id)
+
+            if result is None:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'The agent did not return a usable formula. Please try rephrasing your request.'})}\n\n"
+            elif result.type == "formula":
                 passed = result.validation.passed
                 verb = "a verified" if passed else "a flagged"
                 response_text = f"Here's {verb} formula for {result.product_name}."
                 yield f"data: {json.dumps({'type': 'formula', 'formula': result.model_dump(), 'response': response_text})}\n\n"
                 ai_content = f"[formula] {result.product_name} — {'passed' if passed else 'flagged'} validation."
-            elif result is not None:  # RejectedFormula
+            else:  # RejectedFormula
                 response_text = f"That formula could not be verified: {result.reason}"
                 yield f"data: {json.dumps({'type': 'rejection', 'rejection': result.model_dump(), 'response': response_text})}\n\n"
                 ai_content = f"[rejected] {result.product_name} — {result.reason}"
