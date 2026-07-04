@@ -71,6 +71,23 @@ def detect_modules(message: str) -> list[str]:
     return [mod for mod, pat in _MODULE_PATTERNS.items() if pat.search(message)]
 
 
+# Delta/modification phrasing for follow-up requests. Only consulted when the
+# session already has a formula, so a false positive just means "treat this as a
+# tweak to the existing formula" — a safe default that fixes the F7 dead-end.
+_ITERATION_RE = re.compile(
+    r"\b(?:instead|without|dairy[\s-]?free|make it|now\s+(?:make|do|try)|"
+    r"reduce|lower|increase|raise|bump|more|less|fewer|swap|replace|substitute|"
+    r"hold|keep|remove|drop|cut|add|higher|thinner|creamier|softer|firmer|"
+    r"sweeter|richer|leaner|version)\b",
+    re.I,
+)
+
+
+def detect_iteration(message: str) -> bool:
+    """True if the message reads as a modification of an existing formula."""
+    return bool(_ITERATION_RE.search(message))
+
+
 def search_foods(query: str, n: int = 8) -> List[str]:
     """Score USDA foods by keyword overlap with the query and return the top n.
 
@@ -149,21 +166,36 @@ def _allowed_ingredient_lines() -> str:
     return "\n".join(f"- {ing.name}" for ing in get_repository().ingredients)
 
 
-def build_formula_messages(user_message: str, feedback: Optional[str] = None) -> list:
-    """Build the formula-generation prompt (optionally with repair feedback).
+def build_formula_messages(
+    user_message: str, feedback: Optional[str] = None, parent: Optional[str] = None
+) -> list:
+    """Build the formula-generation prompt.
 
     Deliberately omits conversation history: formula generation needs a clean,
     tightly-constrained prompt. Nutrition fields are intentionally absent from
     the requested schema — the domain layer computes them.
+
+    When `parent` is given (iteration), the current formula is shown and the
+    user's message is treated as a delta to apply — this is what lets follow-ups
+    like "now make it dairy-free" modify the existing formula instead of
+    generating from nothing (F7).
     """
     allowed = _allowed_ingredient_lines()
+    task = f"Create a frozen-dessert formula for: {user_message}"
+    if parent:
+        task = (
+            f"Modify the CURRENT FORMULA below as requested.\n"
+            f"CURRENT FORMULA:\n{parent}\n\n"
+            f"REQUESTED CHANGE: {user_message}\n"
+            f"Keep everything else as close to the current formula as possible."
+        )
     repair = ""
     if feedback:
         repair = (
             "\n\nYOUR PREVIOUS ATTEMPT WAS REJECTED. Fix these problems and try "
             f"again:\n{feedback}\n"
         )
-    prompt = HumanMessage(content=f"""Create a frozen-dessert formula for: {user_message}
+    prompt = HumanMessage(content=f"""{task}
 
 Choose ingredients ONLY from this governed list (use the names verbatim):
 {allowed}
@@ -202,6 +234,12 @@ def regenerate_formula(user_message: str, feedback: str) -> str:
     into a usable formula. Returns raw JSON (still validated downstream).
     """
     return _invoke_formula(build_formula_messages(user_message, feedback=feedback))
+
+
+def iterate_formula(user_message: str, parent: str, feedback: Optional[str] = None) -> str:
+    """Generate a modified formula from a parent formula and a delta request."""
+    return _invoke_formula(
+        build_formula_messages(user_message, feedback=feedback, parent=parent))
 
 
 def formula_agent(state: AgentState):

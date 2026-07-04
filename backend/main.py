@@ -20,7 +20,13 @@ from slowapi.util import get_remote_address
 # level, which reads GROQ_API_KEY and LangSmith vars from the environment.
 load_dotenv()
 
-from graph import agent, detect_modules, regenerate_formula
+from graph import (
+    agent,
+    detect_iteration,
+    detect_modules,
+    iterate_formula,
+    regenerate_formula,
+)
 from domain import CandidateFormula, validate_candidate
 from json_utils import extract_json_block
 from budget import TokenBudget, estimate_tokens
@@ -98,8 +104,63 @@ def _repair_feedback(result) -> str:
         parts.append(v.explanation)
     return " ".join(parts)
 
+
+def _summarize_formula(vf) -> str:
+    """Compact, human-readable parent summary carried into an iteration prompt."""
+    lines = "; ".join(f"{l.ingredient_name} {l.percentage}%" for l in vf.ingredients)
+    return f"{vf.product_name} [{vf.product_format}]: {lines}"
+
+
+def _resolve_formula(raw_text: str, active_modules, user_message: str,
+                     parent: Optional[str] = None):
+    """Parse + validate a formula, with exactly one repair re-prompt on failure.
+
+    Repair regenerates via the iteration prompt when a parent is present, else a
+    fresh generation. Computable-but-non-compliant formulas are returned flagged
+    (not repaired) so the user sees the verification surface.
+    """
+    result = _parse_and_validate(raw_text, active_modules)
+    if result is not None and result.type == "formula":
+        return result
+    try:
+        feedback = _repair_feedback(result)
+        repaired = (iterate_formula(user_message, parent, feedback) if parent
+                    else regenerate_formula(user_message, feedback))
+        retry = _parse_and_validate(repaired, active_modules)
+        if retry is not None and (result is None or retry.type == "formula"):
+            result = retry
+    except Exception:
+        logger.exception("Formula repair re-prompt failed")
+    return result
+
+
+def _emit_and_store(result, session_id: str, history: list):
+    """Yield SSE for a formula/rejection result and update the session stores.
+
+    Successful formulas are remembered per session (rendered summary only) so a
+    follow-up can iterate on them; conversation history stores a short summary,
+    never the raw JSON, keeping later RAG turns clean (F9).
+    """
+    if result is None:
+        yield f"data: {json.dumps({'type': 'error', 'message': 'The agent did not return a usable formula. Please try rephrasing your request.'})}\n\n"
+        ai_content = "[formula] generation failed."
+    elif result.type == "formula":
+        passed = result.validation.passed
+        verb = "a verified" if passed else "a flagged"
+        response_text = f"Here's {verb} formula for {result.product_name}."
+        yield f"data: {json.dumps({'type': 'formula', 'formula': result.model_dump(), 'response': response_text})}\n\n"
+        ai_content = f"[formula] {result.product_name} — {'passed' if passed else 'flagged'} validation."
+        last_formula_store[session_id] = _summarize_formula(result)
+    else:  # RejectedFormula
+        response_text = f"That formula could not be verified: {result.reason}"
+        yield f"data: {json.dumps({'type': 'rejection', 'rejection': result.model_dump(), 'response': response_text})}\n\n"
+        ai_content = f"[rejected] {result.product_name} — {result.reason}"
+    conversation_store[session_id] = history + [AIMessage(content=ai_content)]
+
 # Keyed by session_id. Evicts sessions older than 1 hour or when cap is reached.
 conversation_store: TTLCache = TTLCache(maxsize=500, ttl=3600)
+# Last validated formula per session, for parent-anchored iteration (F7).
+last_formula_store: TTLCache = TTLCache(maxsize=500, ttl=3600)
 
 
 @asynccontextmanager
@@ -138,78 +199,65 @@ def health():
 
 
 async def _stream_agent(
-    history: list, session_id: str, active_modules: Optional[list] = None
+    history: list, session_id: str, active_modules: Optional[list] = None,
+    iteration_parent: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
     """SSE generator that streams LLM tokens to the client.
 
-    RAG responses stream token-by-token. Formula responses accumulate silently
-    (streaming raw JSON mid-parse is meaningless to the client) and are sent as
-    a single structured event once the LLM finishes. The frontend renders a
-    FormulaCard without any client-side JSON assembly.
+    Three paths:
+      * Iteration — a delta request against the session's existing formula.
+        Generates a modified formula directly (no token streaming) and emits it.
+      * Formula — a fresh formulation request routed through the graph; tokens
+        are buffered (streaming raw JSON is meaningless) and the validated
+        formula is emitted once complete.
+      * RAG — an ingredient/nutrition question; tokens stream to the client.
+
+    Every formula (fresh or iterated) passes through the domain validation gate.
 
     Event types emitted:
-      {"type": "token",   "content": str}         — one per RAG token
-      {"type": "formula", "formula": dict,
-                          "response": str}         — end of formula run
-      {"type": "error",   "message": str}         — on agent failure
-      {"type": "done",    "session_id": str}      — always last
+      {"type": "token",     "content": str}                 — one per RAG token
+      {"type": "formula",   "formula": dict, "response": str}
+      {"type": "rejection", "rejection": dict, "response": str}
+      {"type": "error",     "message": str}
+      {"type": "done",      "session_id": str}               — always last
     """
-    formula_buffer = ""
-    streamed_text = ""
-    is_formula_run = False
+    user_msgs = [m for m in history if isinstance(m, HumanMessage)]
+    user_message = user_msgs[-1].content if user_msgs else ""
 
     try:
-        async for event in agent.astream_events({"messages": history}, version="v2"):
-            kind = event["event"]
-            node = event.get("metadata", {}).get("langgraph_node", "")
+        if iteration_parent is not None:
+            # Modify the existing formula from the delta request (F7).
+            raw = iterate_formula(user_message, iteration_parent)
+            result = _resolve_formula(raw, active_modules, user_message,
+                                      parent=iteration_parent)
+            for chunk in _emit_and_store(result, session_id, history):
+                yield chunk
+        else:
+            formula_buffer = ""
+            streamed_text = ""
+            is_formula_run = False
+            async for event in agent.astream_events({"messages": history}, version="v2"):
+                kind = event["event"]
+                node = event.get("metadata", {}).get("langgraph_node", "")
+                if kind == "on_chain_start" and node == "formula_agent":
+                    is_formula_run = True
+                elif kind == "on_chat_model_stream":
+                    token = getattr(event["data"]["chunk"], "content", "") or ""
+                    if not token:
+                        continue
+                    if is_formula_run:
+                        formula_buffer += token
+                    else:
+                        streamed_text += token
+                        yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
 
-            if kind == "on_chain_start" and node == "formula_agent":
-                is_formula_run = True
-
-            elif kind == "on_chat_model_stream":
-                token = getattr(event["data"]["chunk"], "content", "") or ""
-                if not token:
-                    continue
-                if is_formula_run:
-                    formula_buffer += token
-                else:
-                    streamed_text += token
-                    yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
-
-        ai_content = streamed_text
-        if is_formula_run and formula_buffer:
-            # The validation gate: every formula passes through validate_candidate.
-            # There is no path that emits LLM numbers directly to the client.
-            result = _parse_and_validate(formula_buffer, active_modules)
-
-            # Exactly one repair re-prompt when the first attempt cannot be turned
-            # into a usable formula (unparseable or rejected). Computable-but-
-            # non-compliant formulas are surfaced flagged, not repaired (v1).
-            if result is None or result.type == "rejection":
-                user_msgs = [m for m in history if isinstance(m, HumanMessage)]
-                user_message = user_msgs[-1].content if user_msgs else ""
-                try:
-                    repaired_raw = regenerate_formula(user_message, _repair_feedback(result))
-                    retry = _parse_and_validate(repaired_raw, active_modules)
-                    if retry is not None and (result is None or retry.type == "formula"):
-                        result = retry
-                except Exception:
-                    logger.exception("Formula repair re-prompt failed for %s", session_id)
-
-            if result is None:
-                yield f"data: {json.dumps({'type': 'error', 'message': 'The agent did not return a usable formula. Please try rephrasing your request.'})}\n\n"
-            elif result.type == "formula":
-                passed = result.validation.passed
-                verb = "a verified" if passed else "a flagged"
-                response_text = f"Here's {verb} formula for {result.product_name}."
-                yield f"data: {json.dumps({'type': 'formula', 'formula': result.model_dump(), 'response': response_text})}\n\n"
-                ai_content = f"[formula] {result.product_name} — {'passed' if passed else 'flagged'} validation."
-            else:  # RejectedFormula
-                response_text = f"That formula could not be verified: {result.reason}"
-                yield f"data: {json.dumps({'type': 'rejection', 'rejection': result.model_dump(), 'response': response_text})}\n\n"
-                ai_content = f"[rejected] {result.product_name} — {result.reason}"
-
-        conversation_store[session_id] = history + [AIMessage(content=ai_content)]
+            if is_formula_run and formula_buffer:
+                # The validation gate: no path emits LLM numbers to the client.
+                result = _resolve_formula(formula_buffer, active_modules, user_message)
+                for chunk in _emit_and_store(result, session_id, history):
+                    yield chunk
+            else:
+                conversation_store[session_id] = history + [AIMessage(content=streamed_text)]
 
     except Exception:
         logger.exception("Streaming failed for session %s", session_id)
@@ -237,8 +285,12 @@ async def chat(request: Request, req: ChatRequest):
     history.append(HumanMessage(content=req.message))
     active_modules = detect_modules(req.message)
 
+    # Iteration: a delta request against this session's existing formula (F7).
+    parent = last_formula_store.get(session_id)
+    iteration_parent = parent if (parent and detect_iteration(req.message)) else None
+
     return StreamingResponse(
-        _stream_agent(history, session_id, active_modules),
+        _stream_agent(history, session_id, active_modules, iteration_parent),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
