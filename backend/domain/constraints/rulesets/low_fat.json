@@ -1,0 +1,13 @@
+{
+  "module_id": "low_fat",
+  "version": "1.0.0",
+  "label": "Low-fat",
+  "clinical_basis": "Fat ceiling is a configurable formulation default aligned with common low-fat labeling practice. Not medical advice.",
+  "requires_professional_review": false,
+  "nutrient_limits": [
+    {"rule_id": "low_fat.fat", "field": "fat_g", "basis": "per_serving", "max": 3.0, "explanation": "Fat per serving must stay at or below the low-fat limit; fat mimetics are needed to preserve body and flavor release."}
+  ],
+  "ingredient_blacklist_roles": [],
+  "ingredient_blacklist_ids": [],
+  "allergen_blacklist": []
+}

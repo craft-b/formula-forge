@@ -1,0 +1,13 @@
+{
+  "module_id": "high_protein",
+  "version": "1.0.0",
+  "label": "High-protein",
+  "clinical_basis": "Protein floor is a configurable formulation default, not a medical prescription. Requires professional review for any clinical use.",
+  "requires_professional_review": true,
+  "nutrient_limits": [
+    {"rule_id": "high_protein.protein", "field": "protein_g", "basis": "per_serving", "min": 8.0, "explanation": "Protein per serving must reach the high-protein floor; added dairy/plant protein drives chalkiness and gelation risk that quality checks must catch."}
+  ],
+  "ingredient_blacklist_roles": [],
+  "ingredient_blacklist_ids": [],
+  "allergen_blacklist": []
+}

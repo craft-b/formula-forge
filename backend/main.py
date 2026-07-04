@@ -17,9 +17,46 @@ from pydantic import BaseModel, Field
 # level, which reads GROQ_API_KEY and LangSmith vars from the environment.
 load_dotenv()
 
-from graph import agent
+from graph import agent, detect_modules
+from domain import CandidateFormula, validate_candidate
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_json_block(text: str) -> str:
+    """Pull the first JSON object out of an LLM response, tolerating code fences."""
+    raw = text.strip()
+    if "```" in raw:
+        for block in raw.split("```"):
+            cleaned = block.strip()
+            if cleaned.lower().startswith("json"):
+                cleaned = cleaned[4:].strip()
+            if cleaned.startswith("{"):
+                return cleaned
+    return raw
+
+
+def _candidate_from_llm(raw: dict) -> CandidateFormula:
+    """Adapt a raw LLM formula dict to a CandidateFormula (structure only).
+
+    Any nutrition the LLM supplied is intentionally ignored — the domain layer
+    computes all nutrition from the governed ingredient library.
+    """
+    ingredients = []
+    for item in raw.get("ingredients", []):
+        ingredients.append({
+            "ref": item.get("ref") or item.get("name") or "",
+            "percentage": item.get("percentage", 0),
+            "notes": item.get("notes", ""),
+        })
+    return CandidateFormula(
+        product_name=raw.get("product_name") or "Formula",
+        description=raw.get("description", ""),
+        product_format=raw.get("product_format") or "standard",
+        overrun_pct=raw.get("overrun_pct"),
+        ingredients=ingredients,
+        formulation_notes=raw.get("formulation_notes", ""),
+    )
 
 # Keyed by session_id. Evicts sessions older than 1 hour or when cap is reached.
 conversation_store: TTLCache = TTLCache(maxsize=500, ttl=3600)
@@ -59,7 +96,7 @@ def health():
 
 
 async def _stream_agent(
-    history: list, session_id: str
+    history: list, session_id: str, active_modules: Optional[list] = None
 ) -> AsyncGenerator[str, None]:
     """SSE generator that streams LLM tokens to the client.
 
@@ -97,25 +134,30 @@ async def _stream_agent(
                     streamed_text += token
                     yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
 
+        ai_content = streamed_text
         if is_formula_run and formula_buffer:
-            raw = formula_buffer.strip()
-            if "```" in raw:
-                for block in raw.split("```"):
-                    cleaned = block.lstrip("json").strip()
-                    if cleaned.startswith("{"):
-                        raw = cleaned
-                        break
+            # The validation gate: every formula passes through validate_candidate.
+            # There is no path that emits LLM numbers directly to the client.
             try:
-                formula = json.loads(raw)
-                if isinstance(formula, dict) and formula.get("type") == "formula":
-                    response_text = f"Here's a formula for **{formula.get('product_name', 'your product')}**:"
-                    yield f"data: {json.dumps({'type': 'formula', 'formula': formula, 'response': response_text})}\n\n"
-                else:
-                    yield f"data: {json.dumps({'type': 'token', 'content': raw})}\n\n"
-            except (json.JSONDecodeError, ValueError):
-                yield f"data: {json.dumps({'type': 'token', 'content': raw})}\n\n"
+                raw = json.loads(_extract_json_block(formula_buffer))
+                candidate = _candidate_from_llm(raw)
+                result = validate_candidate(candidate, active_modules=active_modules or [])
+            except (json.JSONDecodeError, ValueError) as exc:
+                logger.warning("Formula parse/validation setup failed: %s", exc)
+                yield f"data: {json.dumps({'type': 'error', 'message': 'The agent did not return a usable formula. Please try rephrasing your request.'})}\n\n"
+                result = None
 
-        ai_content = formula_buffer if is_formula_run else streamed_text
+            if result is not None and result.type == "formula":
+                passed = result.validation.passed
+                verb = "a verified" if passed else "a flagged"
+                response_text = f"Here's {verb} formula for {result.product_name}."
+                yield f"data: {json.dumps({'type': 'formula', 'formula': result.model_dump(), 'response': response_text})}\n\n"
+                ai_content = f"[formula] {result.product_name} — {'passed' if passed else 'flagged'} validation."
+            elif result is not None:  # RejectedFormula
+                response_text = f"That formula could not be verified: {result.reason}"
+                yield f"data: {json.dumps({'type': 'rejection', 'rejection': result.model_dump(), 'response': response_text})}\n\n"
+                ai_content = f"[rejected] {result.product_name} — {result.reason}"
+
         conversation_store[session_id] = history + [AIMessage(content=ai_content)]
 
     except Exception:
@@ -131,9 +173,10 @@ async def chat(req: ChatRequest):
     session_id = req.session_id or str(uuid.uuid4())
     history = list(conversation_store.get(session_id, []))
     history.append(HumanMessage(content=req.message))
+    active_modules = detect_modules(req.message)
 
     return StreamingResponse(
-        _stream_agent(history, session_id),
+        _stream_agent(history, session_id, active_modules),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

@@ -1,0 +1,15 @@
+{
+  "module_id": "renal",
+  "version": "1.0.0",
+  "label": "Renal (low phosphorus / potassium / sodium)",
+  "clinical_basis": "Thresholds are configurable defaults informed by published CKD dietary guidance (e.g. KDOQI). They are NOT medical advice and require review by a qualified renal dietitian for any patient use.",
+  "requires_professional_review": true,
+  "nutrient_limits": [
+    {"rule_id": "renal.phosphorus", "field": "phosphorus_mg", "basis": "per_serving", "max": 120.0, "explanation": "Phosphorus per serving must stay at or below the renal limit; dairy is intrinsically high in phosphorus."},
+    {"rule_id": "renal.potassium", "field": "potassium_mg", "basis": "per_serving", "max": 200.0, "explanation": "Potassium per serving must stay at or below the renal limit."},
+    {"rule_id": "renal.sodium", "field": "sodium_mg", "basis": "per_serving", "max": 150.0, "explanation": "Sodium per serving must stay at or below the renal limit."}
+  ],
+  "ingredient_blacklist_roles": [],
+  "ingredient_blacklist_ids": [],
+  "allergen_blacklist": []
+}

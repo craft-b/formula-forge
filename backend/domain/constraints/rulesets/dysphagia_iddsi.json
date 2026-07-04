@@ -1,0 +1,14 @@
+{
+  "module_id": "dysphagia_iddsi",
+  "version": "0.1.0-stub",
+  "label": "Dysphagia / IDDSI texture (STUB — not yet implemented)",
+  "clinical_basis": "Frozen desserts are transitional (solid-to-liquid) foods, which is exactly why IDDSI texture control matters for dysphagia. Full texture-modification logic (flow rate, fork-drip, transitional-food handling) is out of scope for this phase.",
+  "requires_professional_review": true,
+  "stub": true,
+  "iddsi_level_target": null,
+  "nutrient_limits": [],
+  "ingredient_blacklist_roles": [],
+  "ingredient_blacklist_ids": [],
+  "allergen_blacklist": [],
+  "notes": "This ruleset defines the module shape so a full IDDSI evaluator can slot in with zero core changes. The stub evaluator emits a single warn-level advisory and never fails a formula."
+}

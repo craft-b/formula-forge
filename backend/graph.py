@@ -44,6 +44,29 @@ def detect_intent(message: str) -> Literal["formulate", "search"]:
     return "formulate" if _FORMULATION_RE.search(message) else "search"
 
 
+# Maps a dietary-constraint module to the phrases that activate it. Keyword-based
+# by design (same rationale as detect_intent): deterministic and zero-latency.
+_MODULE_PATTERNS: dict[str, re.Pattern] = {
+    "renal": re.compile(r"\b(renal|kidney|ckd|dialysis|low[\s-]?phosphorus|low[\s-]?potassium|low[\s-]?sodium)\b", re.I),
+    "diabetic": re.compile(r"\b(diabet\w*|low[\s-]?glyc-?emic|low[\s-]?sugar|sugar[\s-]?free|no[\s-]?sugar|reduced[\s-]?sugar)\b", re.I),
+    "high_protein": re.compile(r"\b(high[\s-]?protein|protein[\s-]?(enriched|fortified|packed)|added protein)\b", re.I),
+    "low_fat": re.compile(r"\b(low[\s-]?fat|reduced[\s-]?fat|fat[\s-]?free|non[\s-]?fat)\b", re.I),
+    "vegan": re.compile(r"\b(vegan|dairy[\s-]?free|plant[\s-]?based|non[\s-]?dairy)\b", re.I),
+    "dysphagia_iddsi": re.compile(r"\b(dysphagia|iddsi|thickened|texture[\s-]?modified|swallow\w*)\b", re.I),
+}
+
+
+def detect_modules(message: str) -> list[str]:
+    """Detect active dietary-constraint modules from a user message.
+
+    Returns the module ids whose activation phrases appear in the message, in a
+    stable order. These drive the validation gate's compliance checks — they do
+    not put constraint logic into any LLM prompt (that lives in declarative
+    rulesets under domain/constraints/).
+    """
+    return [mod for mod, pat in _MODULE_PATTERNS.items() if pat.search(message)]
+
+
 def search_foods(query: str, n: int = 8) -> List[str]:
     """Score USDA foods by keyword overlap with the query and return the top n.
 

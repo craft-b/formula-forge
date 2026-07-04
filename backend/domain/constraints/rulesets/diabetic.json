@@ -1,0 +1,13 @@
+{
+  "module_id": "diabetic",
+  "version": "1.0.0",
+  "label": "Diabetic / low-glycemic (reduced sugar)",
+  "clinical_basis": "Added-sugar threshold is a configurable default informed by general low-glycemic formulation practice. Not medical advice; requires professional review.",
+  "requires_professional_review": true,
+  "nutrient_limits": [
+    {"rule_id": "diabetic.sugars", "field": "sugars_g", "basis": "per_serving", "max": 8.0, "explanation": "Total sugars per serving must stay at or below the low-glycemic limit; replace sucrose with polyols/allulose while holding PAC and POD in band."}
+  ],
+  "ingredient_blacklist_roles": [],
+  "ingredient_blacklist_ids": [],
+  "allergen_blacklist": []
+}

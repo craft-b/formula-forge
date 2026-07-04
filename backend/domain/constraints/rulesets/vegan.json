@@ -1,0 +1,11 @@
+{
+  "module_id": "vegan",
+  "version": "1.0.0",
+  "label": "Vegan / dairy- and egg-free",
+  "clinical_basis": "Excludes animal-derived ingredients and milk/egg allergens. Formulation constraint, not a medical claim.",
+  "requires_professional_review": false,
+  "nutrient_limits": [],
+  "ingredient_blacklist_roles": ["dairy_base", "dairy_fat", "dairy_solids", "egg"],
+  "ingredient_blacklist_ids": [],
+  "allergen_blacklist": ["milk", "egg"]
+}
