@@ -7,9 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  backend:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -22,7 +21,7 @@ jobs:
         working-directory: backend
         run: pip install -r requirements-dev.txt
 
-      - name: Run tests
+      - name: Run tests (unit, domain, gate, golden-set eval)
         working-directory: backend
         env:
           # Real key not required — LLM calls are mocked in all tests.
@@ -30,3 +29,30 @@ jobs:
           LLM_PROVIDER: groq
           GROQ_MODEL: llama-3.3-70b-versatile
         run: pytest tests/ -v
+
+      - name: Check generated frontend types are in sync
+        working-directory: backend
+        env:
+          GROQ_API_KEY: test-key-ci-placeholder
+        run: |
+          python -m scripts.gen_frontend_types
+          git diff --exit-code ../frontend/src/types/api.ts \
+            || (echo "::error::frontend/src/types/api.ts is stale — run 'python -m scripts.gen_frontend_types'" && exit 1)
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Typecheck and build
+        working-directory: frontend
+        run: npm run build

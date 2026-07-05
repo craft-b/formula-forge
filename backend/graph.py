@@ -1,5 +1,3 @@
-import json
-import os
 import re
 from typing import Literal, Optional, TypedDict, List
 
@@ -7,10 +5,6 @@ from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from llm import get_llm
 from json_utils import extract_json_block
-
-json_path = os.path.join(os.path.dirname(__file__), "usda_foods.json")
-with open(json_path, "r") as f:
-    FOODS = json.load(f)
 
 llm = get_llm()
 # Formula generation uses Groq JSON mode so the model must emit a single JSON
@@ -88,24 +82,42 @@ def detect_iteration(message: str) -> bool:
     return bool(_ITERATION_RE.search(message))
 
 
-def search_foods(query: str, n: int = 8) -> List[str]:
-    """Score USDA foods by keyword overlap with the query and return the top n.
+_WORD_RE = re.compile(r"[a-z0-9]+")
 
-    Chosen over vector embeddings because Render's free tier cannot run an
-    ONNX embedding model — the cold-start memory spike killed the service.
-    Known limitations: no stemming ("proteins" won't match "protein"), no
-    bigram matching, no field weighting. Good enough for the 1,000-food
-    Foundation Foods dataset where descriptions are short and specific.
+
+def _ingredient_context_line(ing) -> str:
+    """Format a governed ingredient with its real per-100 g nutrients for RAG."""
+    nv = ing.nutrients_per_100g
+    return (
+        f"{ing.name}: {round(nv.energy_kcal)} kcal, {nv.protein_g}g protein, "
+        f"{nv.fat_g}g fat, {nv.carbs_g}g carbs, sugars {nv.sugars_g}g, "
+        f"P {round(nv.phosphorus_mg)}mg, K {round(nv.potassium_mg)}mg, "
+        f"Na {round(nv.sodium_mg)}mg (per 100 g)"
+    )
+
+
+def search_foods(query: str, n: int = 8) -> List[str]:
+    """Retrieve governed ingredients matching the query, with real nutrients.
+
+    Retrieval now runs over the governed ingredient library (which carries full
+    USDA-sourced nutrient vectors) rather than the old names-only usda_foods.json,
+    so RAG answers are grounded in real numbers. Keyword scoring with
+    word-boundary tokenization (so "milk" no longer matches "buttermilk") and a
+    length filter; the library is already deduplicated (F8). Vector search is the
+    Phase B upgrade (spec §2.2) once a managed store replaces the free tier.
     """
-    query_words = [w for w in query.lower().split() if len(w) > 2]
+    tokens = {w for w in _WORD_RE.findall(query.lower()) if len(w) > 2}
+    if not tokens:
+        return []
+    from domain import get_repository
     scored = []
-    for food in FOODS:
-        desc = food["description"].lower()
-        score = sum(1 for word in query_words if word in desc)
+    for ing in get_repository().ingredients:
+        haystack = set(_WORD_RE.findall(f"{ing.name} {ing.role}".lower()))
+        score = len(tokens & haystack)
         if score > 0:
-            scored.append((score, food["description"]))
-    scored.sort(reverse=True)
-    return [desc for _, desc in scored[:n]]
+            scored.append((score, ing))
+    scored.sort(key=lambda pair: (-pair[0], pair[1].name))
+    return [_ingredient_context_line(ing) for _, ing in scored[:n]]
 
 
 def orchestrator(state: AgentState):

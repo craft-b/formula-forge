@@ -1,0 +1,271 @@
+{
+  "description": "Golden regression set for the domain validation + compliance engine. Each case is a curated (brief -> formula) pair with an expected outcome. Runs without an LLM so it is deterministic in CI; it guards the domain math and constraint rulesets against regression, not LLM generation quality (which needs a live eval harness, Phase B).",
+  "cases": [
+    {
+      "id": "renal_scoopable_pass",
+      "brief": "Renal-safe scoopable vanilla ice cream",
+      "modules": ["renal"],
+      "format": "premium",
+      "expect_pass": true,
+      "ingredients": [
+        {"ref": "whey protein isolate", "percentage": 4},
+        {"ref": "coconut cream", "percentage": 22},
+        {"ref": "maltodextrin de10", "percentage": 8},
+        {"ref": "sucrose", "percentage": 12},
+        {"ref": "dextrose", "percentage": 4},
+        {"ref": "almond milk unsweetened", "percentage": 47.5},
+        {"ref": "locust bean gum", "percentage": 0.3},
+        {"ref": "vanilla extract", "percentage": 2.2}
+      ]
+    },
+    {
+      "id": "renal_dairy_fail",
+      "brief": "Rich dairy vanilla (should fail renal on K/P)",
+      "modules": ["renal"],
+      "format": "premium",
+      "expect_pass": false,
+      "expect_fail_rule_prefix": "renal.",
+      "ingredients": [
+        {"ref": "cream heavy", "percentage": 30},
+        {"ref": "nonfat dry milk", "percentage": 12},
+        {"ref": "sucrose", "percentage": 14},
+        {"ref": "milk whole", "percentage": 43.4},
+        {"ref": "locust bean gum", "percentage": 0.6}
+      ]
+    },
+    {
+      "id": "diabetic_polyol_pass",
+      "brief": "Low-sugar diabetic-friendly frozen dessert",
+      "modules": ["diabetic"],
+      "format": "standard",
+      "expect_pass": true,
+      "ingredients": [
+        {"ref": "milk skim", "percentage": 55},
+        {"ref": "coconut cream", "percentage": 20},
+        {"ref": "erythritol", "percentage": 10},
+        {"ref": "allulose", "percentage": 8},
+        {"ref": "polydextrose", "percentage": 6},
+        {"ref": "guar gum", "percentage": 1}
+      ]
+    },
+    {
+      "id": "diabetic_sucrose_fail",
+      "brief": "Full-sugar dessert labeled diabetic (should fail sugars)",
+      "modules": ["diabetic"],
+      "format": "standard",
+      "expect_pass": false,
+      "expect_fail_rule_prefix": "diabetic.",
+      "ingredients": [
+        {"ref": "milk whole", "percentage": 58},
+        {"ref": "cream heavy", "percentage": 20},
+        {"ref": "sucrose", "percentage": 21},
+        {"ref": "guar gum", "percentage": 1}
+      ]
+    },
+    {
+      "id": "high_protein_pass",
+      "brief": "High-protein frozen dessert for recovery",
+      "modules": ["high_protein"],
+      "format": "standard",
+      "expect_pass": true,
+      "ingredients": [
+        {"ref": "milk skim", "percentage": 52},
+        {"ref": "whey protein isolate", "percentage": 14},
+        {"ref": "coconut cream", "percentage": 14},
+        {"ref": "sucrose", "percentage": 12},
+        {"ref": "maltodextrin de10", "percentage": 7},
+        {"ref": "guar gum", "percentage": 1}
+      ]
+    },
+    {
+      "id": "high_protein_fail",
+      "brief": "Standard dessert labeled high-protein (should fail floor)",
+      "modules": ["high_protein"],
+      "format": "standard",
+      "expect_pass": false,
+      "expect_fail_rule_prefix": "high_protein.",
+      "ingredients": [
+        {"ref": "milk whole", "percentage": 64},
+        {"ref": "cream heavy", "percentage": 18},
+        {"ref": "sucrose", "percentage": 17},
+        {"ref": "guar gum", "percentage": 1}
+      ]
+    },
+    {
+      "id": "low_fat_pass",
+      "brief": "Low-fat frozen dessert",
+      "modules": ["low_fat"],
+      "format": "standard",
+      "expect_pass": true,
+      "ingredients": [
+        {"ref": "milk skim", "percentage": 66},
+        {"ref": "nonfat dry milk", "percentage": 8},
+        {"ref": "sucrose", "percentage": 14},
+        {"ref": "maltodextrin de10", "percentage": 8},
+        {"ref": "inulin", "percentage": 3},
+        {"ref": "guar gum", "percentage": 1}
+      ]
+    },
+    {
+      "id": "low_fat_fail",
+      "brief": "Cream-rich dessert labeled low-fat (should fail fat ceiling)",
+      "modules": ["low_fat"],
+      "format": "standard",
+      "expect_pass": false,
+      "expect_fail_rule_prefix": "low_fat.",
+      "ingredients": [
+        {"ref": "cream heavy", "percentage": 40},
+        {"ref": "milk whole", "percentage": 42},
+        {"ref": "sucrose", "percentage": 17},
+        {"ref": "guar gum", "percentage": 1}
+      ]
+    },
+    {
+      "id": "vegan_pass",
+      "brief": "Vegan coconut frozen dessert",
+      "modules": ["vegan"],
+      "format": "standard",
+      "expect_pass": true,
+      "ingredients": [
+        {"ref": "coconut cream", "percentage": 42},
+        {"ref": "almond milk unsweetened", "percentage": 39},
+        {"ref": "sucrose", "percentage": 15},
+        {"ref": "maltodextrin de10", "percentage": 3},
+        {"ref": "locust bean gum", "percentage": 1}
+      ]
+    },
+    {
+      "id": "vegan_dairy_fail",
+      "brief": "Dairy dessert labeled vegan (should fail on milk)",
+      "modules": ["vegan"],
+      "format": "standard",
+      "expect_pass": false,
+      "expect_fail_rule_prefix": "vegan.",
+      "ingredients": [
+        {"ref": "milk whole", "percentage": 60},
+        {"ref": "cream heavy", "percentage": 22},
+        {"ref": "sucrose", "percentage": 17},
+        {"ref": "guar gum", "percentage": 1}
+      ]
+    },
+    {
+      "id": "vegan_high_protein_pass",
+      "brief": "Vegan high-protein frozen dessert",
+      "modules": ["vegan", "high_protein"],
+      "format": "standard",
+      "expect_pass": true,
+      "ingredients": [
+        {"ref": "almond milk unsweetened", "percentage": 44},
+        {"ref": "coconut cream", "percentage": 20},
+        {"ref": "soy protein isolate", "percentage": 14},
+        {"ref": "sucrose", "percentage": 13},
+        {"ref": "maltodextrin de10", "percentage": 8},
+        {"ref": "guar gum", "percentage": 1}
+      ]
+    },
+    {
+      "id": "plain_standard_vanilla_pass",
+      "brief": "Standard vanilla ice cream",
+      "modules": [],
+      "format": "standard",
+      "expect_pass": true,
+      "ingredients": [
+        {"ref": "milk whole", "percentage": 58},
+        {"ref": "cream heavy", "percentage": 22},
+        {"ref": "sucrose", "percentage": 14},
+        {"ref": "nonfat dry milk", "percentage": 3},
+        {"ref": "vanilla extract", "percentage": 2},
+        {"ref": "locust bean gum", "percentage": 1}
+      ]
+    },
+    {
+      "id": "plain_premium_chocolate_pass",
+      "brief": "Premium chocolate ice cream",
+      "modules": [],
+      "format": "premium",
+      "expect_pass": true,
+      "ingredients": [
+        {"ref": "cream heavy", "percentage": 24},
+        {"ref": "milk whole", "percentage": 50},
+        {"ref": "sucrose", "percentage": 15},
+        {"ref": "cocoa powder", "percentage": 6},
+        {"ref": "nonfat dry milk", "percentage": 4},
+        {"ref": "guar gum", "percentage": 1}
+      ]
+    },
+    {
+      "id": "diabetic_his_pass",
+      "brief": "Diabetic dessert using high-intensity sweetener",
+      "modules": ["diabetic"],
+      "format": "standard",
+      "expect_pass": true,
+      "ingredients": [
+        {"ref": "milk skim", "percentage": 60},
+        {"ref": "coconut cream", "percentage": 18},
+        {"ref": "erythritol", "percentage": 10},
+        {"ref": "polydextrose", "percentage": 8},
+        {"ref": "sucralose", "percentage": 0.02},
+        {"ref": "guar gum", "percentage": 0.98},
+        {"ref": "inulin", "percentage": 3}
+      ]
+    },
+    {
+      "id": "renal_nondairy_pass",
+      "brief": "Renal non-dairy dessert with MCT calories",
+      "modules": ["renal"],
+      "format": "premium",
+      "expect_pass": true,
+      "ingredients": [
+        {"ref": "almond milk unsweetened", "percentage": 55},
+        {"ref": "coconut oil", "percentage": 10},
+        {"ref": "mct oil", "percentage": 4},
+        {"ref": "sucrose", "percentage": 13},
+        {"ref": "maltodextrin de10", "percentage": 16},
+        {"ref": "locust bean gum", "percentage": 2}
+      ]
+    },
+    {
+      "id": "vegan_chocolate_pass",
+      "brief": "Vegan chocolate frozen dessert",
+      "modules": ["vegan"],
+      "format": "standard",
+      "expect_pass": true,
+      "ingredients": [
+        {"ref": "coconut cream", "percentage": 40},
+        {"ref": "almond milk unsweetened", "percentage": 38},
+        {"ref": "sucrose", "percentage": 15},
+        {"ref": "cocoa powder", "percentage": 5},
+        {"ref": "locust bean gum", "percentage": 2}
+      ]
+    },
+    {
+      "id": "soft_serve_pass",
+      "brief": "Standard soft-serve vanilla",
+      "modules": [],
+      "format": "soft_serve",
+      "expect_pass": true,
+      "ingredients": [
+        {"ref": "milk whole", "percentage": 60},
+        {"ref": "cream heavy", "percentage": 18},
+        {"ref": "sucrose", "percentage": 14},
+        {"ref": "nonfat dry milk", "percentage": 5},
+        {"ref": "guar gum", "percentage": 3}
+      ]
+    },
+    {
+      "id": "low_fat_diabetic_pass",
+      "brief": "Low-fat and diabetic frozen dessert",
+      "modules": ["low_fat", "diabetic"],
+      "format": "standard",
+      "expect_pass": true,
+      "ingredients": [
+        {"ref": "milk skim", "percentage": 64},
+        {"ref": "erythritol", "percentage": 11},
+        {"ref": "allulose", "percentage": 8},
+        {"ref": "polydextrose", "percentage": 8},
+        {"ref": "inulin", "percentage": 8},
+        {"ref": "guar gum", "percentage": 1}
+      ]
+    }
+  ]
+}
