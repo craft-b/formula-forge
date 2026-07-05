@@ -16,9 +16,7 @@ from __future__ import annotations
 
 import os
 
-from dotenv import load_dotenv
-
-load_dotenv()
+import config  # noqa: F401  # importing loads .env once (single load point, F15)
 
 DEFAULT_TEMPERATURE = 0.3
 DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"

@@ -1,12 +1,10 @@
 import json
 import logging
-import os
 import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
 
 from cachetools import TTLCache
-from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -16,9 +14,9 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-# load_dotenv must run before graph import — graph.py calls get_llm() at module
-# level, which reads GROQ_API_KEY and LangSmith vars from the environment.
-load_dotenv()
+# config import is the single .env load point (F15); must precede graph import
+# because graph.py calls get_llm() at module level.
+from config import settings
 
 from graph import (
     agent,
@@ -30,7 +28,9 @@ from graph import (
 from domain import CandidateFormula, validate_candidate
 from json_utils import extract_json_block
 from budget import TokenBudget, estimate_tokens
+from observability import new_request_id, request_id_var, setup_logging
 
+setup_logging(settings.log_level)
 logger = logging.getLogger(__name__)
 
 
@@ -39,17 +39,14 @@ def _parse_origins(raw: str) -> list[str]:
 
 
 # ── Abuse controls (F4) ───────────────────────────────────────────────────────
-# CORS locked to an explicit allowlist (no wildcard). Override via ALLOWED_ORIGINS.
-ALLOWED_ORIGINS = _parse_origins(os.getenv(
-    "ALLOWED_ORIGINS",
-    "http://localhost:5173,http://localhost:3000,https://formula-forge-chi.vercel.app",
-))
+# CORS locked to an explicit allowlist (no wildcard).
+ALLOWED_ORIGINS = settings.origins
 # Per-request rate limit, read at call time so tests can override the module global.
-CHAT_RATE_LIMIT = os.getenv("CHAT_RATE_LIMIT", "30/minute")
+CHAT_RATE_LIMIT = settings.chat_rate_limit
 # Daily token budgets (reserve-up-front) — global and per session.
 budget = TokenBudget(
-    global_daily=int(os.getenv("GLOBAL_DAILY_TOKENS", "2000000")),
-    session_daily=int(os.getenv("SESSION_DAILY_TOKENS", "50000")),
+    global_daily=settings.global_daily_tokens,
+    session_daily=settings.session_daily_tokens,
 )
 limiter = Limiter(key_func=get_remote_address)
 
@@ -167,10 +164,9 @@ last_formula_store: TTLCache = TTLCache(maxsize=500, ttl=3600)
 async def lifespan(app: FastAPI):
     # graph.py builds and compiles the LangGraph at import time above,
     # so by the time the first request arrives the graph is already warm.
-    tracing = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
     logger.info(
         "FormulaForge startup: LangGraph agent ready | LangSmith tracing %s",
-        "ENABLED" if tracing else "disabled",
+        "ENABLED" if settings.langchain_tracing_v2 else "disabled",
     )
     yield
 
@@ -178,6 +174,19 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    """Attach a correlation id to every request for traceable structured logs."""
+    rid = request.headers.get("X-Request-ID") or new_request_id()
+    token = request_id_var.set(rid)
+    try:
+        response = await call_next(request)
+    finally:
+        request_id_var.reset(token)
+    response.headers["X-Request-ID"] = rid
+    return response
 
 app.add_middleware(
     CORSMiddleware,
