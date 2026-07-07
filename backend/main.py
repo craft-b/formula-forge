@@ -199,6 +199,33 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
     session_id: Optional[str] = None
+    # Explicit constraint-module selection from the brief builder UI. Unioned
+    # with keyword detection; unknown ids are ignored (validated server-side).
+    modules: Optional[list[str]] = None
+
+
+@app.get("/api/meta")
+def meta():
+    """Workspace metadata for the frontend: dataset lineage + available modules."""
+    from domain import available_modules, get_repository
+    from domain.constraints import get_ruleset
+
+    repo = get_repository()
+    modules = []
+    for mid in available_modules():
+        rs = get_ruleset(mid) or {}
+        modules.append({
+            "id": mid,
+            "label": rs.get("label", mid),
+            "stub": bool(rs.get("stub", False)),
+            "requires_professional_review": bool(rs.get("requires_professional_review", False)),
+        })
+    return {
+        "dataset_version": repo.version,
+        "ingredient_count": len(repo.ingredients),
+        "modules": modules,
+        "model": settings.groq_model,
+    }
 
 
 
@@ -292,7 +319,15 @@ async def chat(request: Request, req: ChatRequest):
 
     history = list(conversation_store.get(session_id, []))
     history.append(HumanMessage(content=req.message))
+
+    # Active modules = keyword detection ∪ explicit brief-builder selection
+    # (unknown ids ignored). Order kept stable for display.
+    from domain import available_modules as _avail
+    known = set(_avail())
     active_modules = detect_modules(req.message)
+    for m in req.modules or []:
+        if m in known and m not in active_modules:
+            active_modules.append(m)
 
     # Iteration: a delta request against this session's existing formula (F7).
     parent = last_formula_store.get(session_id)
