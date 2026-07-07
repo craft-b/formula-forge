@@ -88,3 +88,59 @@ class TestExplicitModules:
         events = _parse_sse(r.text)
         formula = next(e for e in events if e.get("type") == "formula")["formula"]
         assert formula["validation"]["active_modules"] == []
+
+
+class TestExplicitProductFormat:
+    _STANDARD = {"type": "formula", "product_name": "Vanilla",
+                 "product_format": "standard",
+                 "ingredients": [{"ref": "milk whole", "percentage": 62},
+                                 {"ref": "cream heavy", "percentage": 20},
+                                 {"ref": "sucrose", "percentage": 18}]}
+
+    def test_explicit_format_overrides_llm_guess(self):
+        # LLM says "standard"; the brief builder selected "gelato" — the user's
+        # selection wins, and serving math follows (gelato overrun 25%).
+        with patch("main.agent") as m:
+            m.astream_events = _formula_stream(self._STANDARD)
+            with TestClient(main.app) as client:
+                r = client.post("/api/chat", json={
+                    "message": "create a vanilla formula",
+                    "product_format": "gelato",
+                })
+        formula = next(e for e in _parse_sse(r.text)
+                       if e.get("type") == "formula")["formula"]
+        assert formula["composition"]["product_format"] == "gelato"
+        assert formula["composition"]["overrun_pct"] == 25.0
+
+    def test_invalid_format_ignored(self):
+        with patch("main.agent") as m:
+            m.astream_events = _formula_stream(self._STANDARD)
+            with TestClient(main.app) as client:
+                r = client.post("/api/chat", json={
+                    "message": "create a vanilla formula",
+                    "product_format": "extruded_novelty_9000",
+                })
+        formula = next(e for e in _parse_sse(r.text)
+                       if e.get("type") == "formula")["formula"]
+        assert formula["composition"]["product_format"] == "standard"  # LLM's value kept
+
+    def test_rag_question_unaffected_by_format_and_modules(self):
+        # A plain question with brief-builder settings attached must stream a
+        # normal text answer — no formula, no rejection, no error.
+        async def _rag(*a, **k):
+            class _C:  # minimal chunk
+                content = "Typical premium overrun is 20-60%."
+            yield {"event": "on_chat_model_stream", "data": {"chunk": _C()},
+                   "metadata": {"langgraph_node": "rag_agent"}}
+        with patch("main.agent") as m:
+            m.astream_events = _rag
+            with TestClient(main.app) as client:
+                r = client.post("/api/chat", json={
+                    "message": "how much overrun should i use",
+                    "modules": ["vegan"],
+                    "product_format": "premium",
+                })
+        events = _parse_sse(r.text)
+        types = {e.get("type") for e in events}
+        assert "token" in types
+        assert "formula" not in types and "rejection" not in types and "error" not in types

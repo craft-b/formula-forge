@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { BriefPanel, FORMATS } from "@/components/BriefPanel"
+import { BriefPanel } from "@/components/BriefPanel"
 import { FormulaReport, RejectionReport } from "@/components/FormulaReport"
 import { StatTile } from "@/components/viz"
 import { Markdown } from "@/lib/markdown"
@@ -15,7 +15,6 @@ interface Run {
   content: string
   formula?: ValidatedFormula
   rejection?: RejectedFormula
-  chips?: string[]
 }
 
 // ── Pipeline progress (shown while a run is in flight) ───────────────────────
@@ -58,6 +57,9 @@ function PipelineProgress() {
 
 // ── Run rows ──────────────────────────────────────────────────────────────────
 
+// Deliberately no format/module chips here: at send time the run's intent
+// (formula vs question) isn't known, so chips would mislabel plain questions.
+// The authoritative chips render on the FormulaReport from validated data.
 function BriefRow({ run }: { run: Run }) {
   return (
     <div className="flex items-baseline gap-3 flex-wrap">
@@ -65,11 +67,6 @@ function BriefRow({ run }: { run: Run }) {
         Brief
       </span>
       <span className="text-sm font-medium text-slate-800">{run.content}</span>
-      {(run.chips ?? []).map((c) => (
-        <span key={c} className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-200/70 text-slate-600 capitalize">
-          {c.replace("_", " ")}
-        </span>
-      ))}
     </div>
   )
 }
@@ -187,15 +184,10 @@ export default function App() {
   async function sendMessage(text: string, moduleOverride?: string[]) {
     if (!text.trim() || loading) return
     const modules = moduleOverride ?? Array.from(selectedModules)
-    const hasFormatWord = FORMATS.some((f) => text.toLowerCase().includes(f.id.replace("_", " ")))
-    const sentText = hasFormatWord ? text : `${text} — ${format.replace("_", " ")} format`
 
     setInput("")
     setFollowUp("")
-    setRuns((prev) => [
-      ...prev,
-      { role: "user", content: text, chips: [format, ...modules] },
-    ])
+    setRuns((prev) => [...prev, { role: "user", content: text }])
     setLoading(true)
 
     const controller = new AbortController()
@@ -206,7 +198,12 @@ export default function App() {
       const res = await fetch(`${API_URL}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: sentText, session_id: sessionId, modules }),
+        body: JSON.stringify({
+          message: text,
+          session_id: sessionId,
+          modules,
+          product_format: format,
+        }),
         signal: controller.signal,
       })
 

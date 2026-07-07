@@ -78,11 +78,18 @@ def _candidate_from_llm(raw: dict) -> CandidateFormula:
     )
 
 
-def _parse_and_validate(raw_text: str, active_modules: Optional[list]):
-    """Parse raw LLM text and run it through the domain gate. None on parse failure."""
+def _parse_and_validate(raw_text: str, active_modules: Optional[list],
+                        product_format: Optional[str] = None):
+    """Parse raw LLM text and run it through the domain gate. None on parse failure.
+
+    An explicit `product_format` (user's brief-builder selection) overrides the
+    LLM's guess — serving/overrun math then reflects what the user chose.
+    """
     try:
         raw = json.loads(extract_json_block(raw_text))
         candidate = _candidate_from_llm(raw)
+        if product_format:
+            candidate.product_format = product_format
         return validate_candidate(candidate, active_modules=active_modules or [])
     except (json.JSONDecodeError, ValueError) as exc:
         logger.warning("Formula parse/validation setup failed: %s", exc)
@@ -109,21 +116,22 @@ def _summarize_formula(vf) -> str:
 
 
 def _resolve_formula(raw_text: str, active_modules, user_message: str,
-                     parent: Optional[str] = None):
+                     parent: Optional[str] = None,
+                     product_format: Optional[str] = None):
     """Parse + validate a formula, with exactly one repair re-prompt on failure.
 
     Repair regenerates via the iteration prompt when a parent is present, else a
     fresh generation. Computable-but-non-compliant formulas are returned flagged
     (not repaired) so the user sees the verification surface.
     """
-    result = _parse_and_validate(raw_text, active_modules)
+    result = _parse_and_validate(raw_text, active_modules, product_format)
     if result is not None and result.type == "formula":
         return result
     try:
         feedback = _repair_feedback(result)
         repaired = (iterate_formula(user_message, parent, feedback) if parent
                     else regenerate_formula(user_message, feedback))
-        retry = _parse_and_validate(repaired, active_modules)
+        retry = _parse_and_validate(repaired, active_modules, product_format)
         if retry is not None and (result is None or retry.type == "formula"):
             result = retry
     except Exception:
@@ -202,6 +210,10 @@ class ChatRequest(BaseModel):
     # Explicit constraint-module selection from the brief builder UI. Unioned
     # with keyword detection; unknown ids are ignored (validated server-side).
     modules: Optional[list[str]] = None
+    # Explicit product-format selection from the brief builder. Applied ONLY on
+    # formula runs (overrides the LLM's guess); ignored for RAG questions, so a
+    # question is never polluted with formulation settings.
+    product_format: Optional[str] = None
 
 
 @app.get("/api/meta")
@@ -236,7 +248,7 @@ def health():
 
 async def _stream_agent(
     history: list, session_id: str, active_modules: Optional[list] = None,
-    iteration_parent: Optional[str] = None,
+    iteration_parent: Optional[str] = None, product_format: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
     """SSE generator that streams LLM tokens to the client.
 
@@ -265,7 +277,8 @@ async def _stream_agent(
             # Modify the existing formula from the delta request (F7).
             raw = iterate_formula(user_message, iteration_parent)
             result = _resolve_formula(raw, active_modules, user_message,
-                                      parent=iteration_parent)
+                                      parent=iteration_parent,
+                                      product_format=product_format)
             for chunk in _emit_and_store(result, session_id, history):
                 yield chunk
         else:
@@ -289,7 +302,8 @@ async def _stream_agent(
 
             if is_formula_run and formula_buffer:
                 # The validation gate: no path emits LLM numbers to the client.
-                result = _resolve_formula(formula_buffer, active_modules, user_message)
+                result = _resolve_formula(formula_buffer, active_modules, user_message,
+                                          product_format=product_format)
                 for chunk in _emit_and_store(result, session_id, history):
                     yield chunk
             else:
@@ -329,12 +343,18 @@ async def chat(request: Request, req: ChatRequest):
         if m in known and m not in active_modules:
             active_modules.append(m)
 
+    # Explicit product format (brief builder) — validated, applied only if the
+    # run turns out to be a formula run.
+    from domain.constants import DEFAULT_OVERRUN
+    product_format = req.product_format if req.product_format in DEFAULT_OVERRUN else None
+
     # Iteration: a delta request against this session's existing formula (F7).
     parent = last_formula_store.get(session_id)
     iteration_parent = parent if (parent and detect_iteration(req.message)) else None
 
     return StreamingResponse(
-        _stream_agent(history, session_id, active_modules, iteration_parent),
+        _stream_agent(history, session_id, active_modules, iteration_parent,
+                      product_format),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
