@@ -83,8 +83,22 @@ function BriefRow({ run, index }: { run: Run; index: number }) {
   )
 }
 
-function AnswerBlock({ run }: { run: Run }) {
-  if (run.formula) return <FormulaReport formula={run.formula} />
+function AnswerBlock({
+  run,
+  version,
+  previous,
+}: {
+  run: Run
+  version?: number
+  previous?: ValidatedFormula | null
+}) {
+  if (run.formula) {
+    return (
+      <div id={version != null ? `formula-v${version}` : undefined} className="scroll-mt-4">
+        <FormulaReport formula={run.formula} version={version} previous={previous} />
+      </div>
+    )
+  }
   if (run.rejection) return <RejectionReport rejection={run.rejection} />
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm text-slate-700 leading-relaxed ff-rise">
@@ -245,11 +259,27 @@ export default function App() {
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
+  // Meta powers the module toggles and evidence strip. Retry with backoff:
+  // the demo backend cold-starts (~50 s on Render), and a single failed fetch
+  // would leave the rail permanently empty.
   useEffect(() => {
-    fetch(`${API_URL}/api/meta`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((m) => m && setMeta(m))
-      .catch(() => {})
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout>
+    const attempt = (n: number) => {
+      fetch(`${API_URL}/api/meta`)
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+        .then((m) => {
+          if (!cancelled && m) setMeta(m)
+        })
+        .catch(() => {
+          if (!cancelled && n < 20) timer = setTimeout(() => attempt(n + 1), 5000)
+        })
+    }
+    attempt(0)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
   }, [])
 
   function toggleModule(id: string) {
@@ -409,6 +439,22 @@ export default function App() {
   const hasFormula = runs.some((r) => r.formula)
   let briefNo = 0
 
+  // Version bookkeeping: the nth formula in the feed is vn; each formula run
+  // also knows its predecessor so the report can render a verified diff.
+  const versionByRunIndex = new Map<number, { version: number; previous: ValidatedFormula | null }>()
+  {
+    let prev: ValidatedFormula | null = null
+    let v = 0
+    runs.forEach((run, i) => {
+      if (run.formula) {
+        v += 1
+        versionByRunIndex.set(i, { version: v, previous: prev })
+        prev = run.formula
+      }
+    })
+  }
+  const versionCount = versionByRunIndex.size
+
   return (
     <div className="h-screen flex bg-slate-100">
       {/* ── Left rail: brief console ── */}
@@ -528,11 +574,41 @@ export default function App() {
               <Hero meta={meta} onTemplate={handleTemplate} />
             ) : (
               <div className="space-y-5" role="log" aria-live="polite">
+                {versionCount > 1 && (
+                  <nav
+                    aria-label="Formula versions"
+                    className="sticky top-2 z-10 flex justify-end print-hide"
+                  >
+                    <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/85 backdrop-blur px-1.5 py-1 shadow-sm">
+                      <span className="text-[9px] font-semibold tracking-[0.1em] text-slate-400 uppercase pl-1.5 pr-0.5">
+                        Versions
+                      </span>
+                      {Array.from({ length: versionCount }, (_, vi) => (
+                        <button
+                          key={vi}
+                          onClick={() =>
+                            document
+                              .getElementById(`formula-v${vi + 1}`)
+                              ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                          }
+                          className="num text-[11px] font-semibold px-2 py-0.5 rounded-full text-slate-500 hover:bg-slate-900 hover:text-white transition-colors"
+                        >
+                          v{vi + 1}
+                        </button>
+                      ))}
+                    </div>
+                  </nav>
+                )}
                 {runs.map((run, i) =>
                   run.role === "user" ? (
                     <BriefRow key={i} run={run} index={++briefNo} />
                   ) : (
-                    <AnswerBlock key={i} run={run} />
+                    <AnswerBlock
+                      key={i}
+                      run={run}
+                      version={versionByRunIndex.get(i)?.version}
+                      previous={versionByRunIndex.get(i)?.previous}
+                    />
                   )
                 )}
                 {loading && runs[runs.length - 1]?.role === "user" && <PipelineProgress />}

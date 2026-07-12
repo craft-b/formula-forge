@@ -7,6 +7,7 @@
 import { useState } from "react"
 import { Check, Copy, Download, Printer } from "lucide-react"
 import { Markdown } from "@/lib/markdown"
+import { FormulaDiff } from "./FormulaDiff"
 import { ProcessMethod } from "./ProcessMethod"
 import type { NutrientVector, RejectedFormula, ValidatedFormula } from "@/types/api"
 import {
@@ -124,7 +125,15 @@ function ReportActions({ formula }: { formula: ValidatedFormula }) {
   )
 }
 
-export function FormulaReport({ formula }: { formula: ValidatedFormula }) {
+export function FormulaReport({
+  formula,
+  version,
+  previous,
+}: {
+  formula: ValidatedFormula
+  version?: number
+  previous?: ValidatedFormula | null
+}) {
   const { composition: c, validation: val } = formula
   const passed = val.passed
   const violations = val.violations ?? []
@@ -155,6 +164,11 @@ export function FormulaReport({ formula }: { formula: ValidatedFormula }) {
               <span className="text-[10px] font-semibold tracking-[0.14em] text-slate-400 uppercase">
                 Formula report
               </span>
+              {version != null && (
+                <span className="num text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-900 text-white">
+                  v{version}
+                </span>
+              )}
               <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 capitalize">
                 {c.product_format.replace("_", " ")}
               </span>
@@ -190,6 +204,13 @@ export function FormulaReport({ formula }: { formula: ValidatedFormula }) {
       </div>
 
       <div className="px-6 py-5 space-y-6">
+        {/* ── What changed vs the previous iteration ── */}
+        {previous && version != null && (
+          <div className="ff-rise ff-rise-1">
+            <FormulaDiff previous={previous} current={formula} fromVersion={version - 1} />
+          </div>
+        )}
+
         {/* ── Compliance ── */}
         {(errors.length > 0 || warnings.length > 0) && (
           <section className="ff-rise ff-rise-1">
