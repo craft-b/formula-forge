@@ -198,15 +198,42 @@ body {
 .rail-scroll::-webkit-scrollbar-thumb:hover { background: oklch(1 0 0 / 20%); }
 .rail-scroll { scrollbar-width: thin; scrollbar-color: oklch(1 0 0 / 12%) transparent; }
 
-/* ── Print: the formula report exports as a clean document ─────────────────── */
+/* ── Print: the formula report exports as a clean document ───────────────────
+   The app shell is a fixed h-screen flex layout with the feed in an
+   overflow-y-auto container; print engines clip that to one viewport. Unlock
+   every height/overflow constraint so the full report flows across pages. */
+
+@page {
+  margin: 14mm;
+}
 
 @media print {
+  html, body, #root {
+    height: auto !important;
+    overflow: visible !important;
+  }
   body { background: #fff; }
+  /* Shell containers: stop constraining to the viewport. */
+  #root > div {
+    display: block !important;
+    height: auto !important;
+  }
+  main, main > div, #root > div > div {
+    overflow: visible !important;
+    height: auto !important;
+  }
   .print-hide { display: none !important; }
   .print-block {
     box-shadow: none !important;
     border-color: #cbd5e1 !important;
-    break-inside: avoid;
   }
-  main { overflow: visible !important; }
+  /* Sections stay whole across page breaks where possible. */
+  section, table, li { break-inside: avoid; }
+  /* Entrance animations must not leave elements at opacity 0 in the snapshot. */
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
