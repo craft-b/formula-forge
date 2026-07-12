@@ -3,7 +3,8 @@
 // CVD separation, contrast vs surface) — do not swap hues without re-validating:
 //   composition categorical: teal #0d9488 · indigo #4f46e5 · amber #d97706 · fuchsia #c026d3
 // Water is the neutral remainder track, not a category. Status colors are
-// reserved (pass/fail/warn) and always ship with an icon + label.
+// reserved (pass/fail/warn) and always ship with an icon + label. Every numeric
+// uses tabular figures (.num) so columns align at a glance.
 
 import type { ReactNode } from "react"
 
@@ -14,6 +15,45 @@ export const COMPOSITION_COLORS = {
   other: "#c026d3",
   water: "#e2e8f0",
 } as const
+
+// ── Section heading (uppercase micro-label used across the report) ────────────
+
+export function SectionTitle({
+  children,
+  meta,
+}: {
+  children: ReactNode
+  meta?: ReactNode
+}) {
+  return (
+    <h4 className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] mb-2.5 flex items-baseline gap-2 flex-wrap">
+      <span>{children}</span>
+      {meta && <span className="normal-case tracking-normal font-normal text-slate-400">{meta}</span>}
+    </h4>
+  )
+}
+
+// ── Provenance mark: ✓ rule-verified / ~ model-estimated ─────────────────────
+
+export function ProvenanceMark({ estimated }: { estimated: boolean }) {
+  return estimated ? (
+    <span
+      title="Model-estimated"
+      aria-label="Model-estimated"
+      className="text-amber-600 font-semibold shrink-0"
+    >
+      ~
+    </span>
+  ) : (
+    <span
+      title="Rule-verified (computed by the domain engine)"
+      aria-label="Rule-verified"
+      className="text-teal-600 shrink-0"
+    >
+      ✓
+    </span>
+  )
+}
 
 // ── Stat tile ─────────────────────────────────────────────────────────────────
 
@@ -31,17 +71,15 @@ export function StatTile({
   hint?: string
 }) {
   return (
-    <div className="bg-white border border-slate-200/80 rounded-xl px-3.5 py-3" title={hint}>
+    <div
+      className="bg-white border border-slate-200/80 rounded-xl px-3.5 py-3 transition-colors hover:border-slate-300"
+      title={hint}
+    >
       <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5">
         <span className="truncate">{label}</span>
-        {estimated !== undefined &&
-          (estimated ? (
-            <span title="Model-estimated" className="text-amber-600 font-semibold shrink-0">~</span>
-          ) : (
-            <span title="Rule-verified (computed)" className="text-teal-600 shrink-0">✓</span>
-          ))}
+        {estimated !== undefined && <ProvenanceMark estimated={estimated} />}
       </div>
-      <div className="text-lg font-semibold text-slate-900 mt-1 leading-none">
+      <div className="text-lg font-semibold text-slate-900 mt-1 leading-none num font-mono">
         {value}
         {unit && <span className="text-[11px] font-normal text-slate-400 ml-1">{unit}</span>}
       </div>
@@ -76,7 +114,7 @@ export function BulletBand({
     <div title={`${label} ${value} — target ${bandLo}–${bandHi}`}>
       <div className="flex justify-between items-baseline mb-1.5">
         <span className="text-[11px] font-medium text-slate-500">{label}</span>
-        <span className="text-xs font-semibold text-slate-800 tabular-nums">
+        <span className="text-xs font-semibold text-slate-800 num">
           {value.toFixed(1)}
           <span className={`ml-1.5 text-[10px] font-medium ${inBand ? "text-teal-700" : "text-amber-700"}`}>
             {inBand ? "in band" : value < bandLo ? "below band" : "above band"}
@@ -91,11 +129,11 @@ export function BulletBand({
         />
         {/* value marker: 2px line with surface ring */}
         <div
-          className="absolute -inset-y-0.5 w-[2px] bg-slate-800 ring-2 ring-white rounded-full"
+          className="absolute -inset-y-0.5 w-[2px] bg-slate-800 ring-2 ring-white rounded-full transition-[left] duration-700"
           style={{ left: `calc(${pct(value)}% - 1px)` }}
         />
       </div>
-      <div className="flex justify-between mt-1 text-[10px] text-slate-400 tabular-nums">
+      <div className="flex justify-between mt-1 text-[10px] text-slate-400 num">
         <span>{domainLo}</span>
         <span className="text-slate-500">target {bandLo}–{bandHi}</span>
         <span>{domainHi}</span>
@@ -119,7 +157,7 @@ export function CompositionBar({ segments }: { segments: Segment[] }) {
   return (
     <div>
       {/* 2px surface gaps between segments via flex gap on a white background */}
-      <div className="flex h-4 rounded-md overflow-hidden bg-white gap-[2px]">
+      <div className="flex h-4 rounded-md overflow-hidden bg-white gap-[2px] ff-bar-grow">
         {shown.map((s) => (
           <div
             key={s.key}
@@ -134,10 +172,24 @@ export function CompositionBar({ segments }: { segments: Segment[] }) {
           <span key={s.key} className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
             <span className="w-2.5 h-2.5 rounded-[3px]" style={{ backgroundColor: s.color }} />
             {s.label}
-            <span className="text-slate-400 tabular-nums">{s.value.toFixed(1)}%</span>
+            <span className="text-slate-400 num">{s.value.toFixed(1)}%</span>
           </span>
         ))}
       </div>
+    </div>
+  )
+}
+
+// ── Inline percentage bar (ingredient rows) ───────────────────────────────────
+
+export function InlineBar({ value, max }: { value: number; max: number }) {
+  const w = max > 0 ? Math.min((value / max) * 100, 100) : 0
+  return (
+    <div className="h-[5px] w-full rounded-full bg-slate-100 overflow-hidden" aria-hidden>
+      <div
+        className="h-full rounded-full bg-teal-600/70 ff-bar-grow"
+        style={{ width: `${w}%` }}
+      />
     </div>
   )
 }
@@ -168,12 +220,12 @@ export function LimitRow({
   return (
     <div className={`rounded-lg border px-3.5 py-2.5 ${tone.chip}`}>
       <div className="flex items-start gap-2.5">
-        <span className={`text-xs font-bold mt-px ${tone.text}`}>{icon}</span>
+        <span className={`text-xs font-bold mt-px ${tone.text}`} aria-hidden>{icon}</span>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-3">
             <span className={`text-xs font-semibold ${tone.text}`}>{name}</span>
             {hasBar && (
-              <span className="text-[11px] text-slate-600 tabular-nums shrink-0">
+              <span className="text-[11px] text-slate-600 num shrink-0">
                 {measured} <span className="text-slate-400">/ limit {limit}</span>
               </span>
             )}
@@ -182,7 +234,7 @@ export function LimitRow({
           {hasBar && (
             <div className="relative h-1.5 mt-2 rounded-full bg-white/80">
               <div
-                className="absolute inset-y-0 left-0 rounded-full"
+                className="absolute inset-y-0 left-0 rounded-full ff-bar-grow"
                 style={{ width: `${Math.min((ratio / 1.6) * 100, 100)}%`, backgroundColor: tone.fill }}
               />
               {/* limit tick at 1.0 of the 1.6 domain */}
@@ -204,7 +256,7 @@ export function StatusPill({ ok, children }: { ok: boolean; children: ReactNode 
         ok ? "bg-teal-50 text-teal-700 border border-teal-200" : "bg-red-50 text-red-700 border border-red-200"
       }`}
     >
-      <span>{ok ? "✓" : "✕"}</span>
+      <span aria-hidden>{ok ? "✓" : "✕"}</span>
       {children}
     </span>
   )

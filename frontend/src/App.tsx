@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
+import { ArrowUpRight, Database, FlaskConical, Leaf, ShieldCheck, Zap } from "lucide-react"
 import { BriefPanel } from "@/components/BriefPanel"
 import { FormulaReport, RejectionReport } from "@/components/FormulaReport"
-import { StatTile } from "@/components/viz"
 import { Markdown } from "@/lib/markdown"
 import type { RejectedFormula, SSEEvent, ValidatedFormula } from "@/types/api"
 import type { WorkspaceMeta } from "@/types/meta"
@@ -19,7 +19,13 @@ interface Run {
 
 // ── Pipeline progress (shown while a run is in flight) ───────────────────────
 
-const PIPELINE_STEPS = ["Propose", "Resolve", "Compute", "Validate", "Score"]
+const PIPELINE_STEPS = [
+  { label: "Propose", detail: "LLM drafts an ingredient structure" },
+  { label: "Resolve", detail: "each line matched to the governed library" },
+  { label: "Compute", detail: "nutrients, PAC/POD, solids — deterministically" },
+  { label: "Validate", detail: "physics bands + active compliance rules" },
+  { label: "Score", detail: "scoopability and cost estimates" },
+]
 
 function PipelineProgress() {
   const [step, setStep] = useState(0)
@@ -28,10 +34,10 @@ function PipelineProgress() {
     return () => clearInterval(t)
   }, [])
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-6 py-5">
+    <div className="rounded-2xl border border-slate-200 bg-white px-6 py-5 ff-rise" role="status" aria-label="Formulation pipeline running">
       <div className="flex items-center gap-0">
-        {PIPELINE_STEPS.map((label, i) => (
-          <div key={label} className="flex items-center">
+        {PIPELINE_STEPS.map((s, i) => (
+          <div key={s.label} className="flex items-center">
             <div className="flex flex-col items-center gap-1.5">
               <span
                 className={`w-2.5 h-2.5 rounded-full transition-colors ${
@@ -39,18 +45,21 @@ function PipelineProgress() {
                 }`}
               />
               <span className={`text-[10px] font-medium ${i <= step ? "text-slate-700" : "text-slate-400"}`}>
-                {label}
+                {s.label}
               </span>
             </div>
             {i < PIPELINE_STEPS.length - 1 && (
-              <span className={`w-10 sm:w-16 h-px mx-1 mb-4 ${i < step ? "bg-teal-400" : "bg-slate-200"}`} />
+              <span className={`w-8 sm:w-14 h-px mx-1 mb-4 transition-colors ${i < step ? "bg-teal-400" : "bg-slate-200"}`} />
             )}
           </div>
         ))}
-        <span className="ml-auto mb-4 text-[11px] text-slate-400">
+        <span className="ml-auto mb-4 hidden sm:inline text-[11px] text-slate-400">
           LLM proposes · domain verifies
         </span>
       </div>
+      <p className="text-[11px] mt-1.5 ff-shimmer-text w-fit">
+        {PIPELINE_STEPS[step].label} — {PIPELINE_STEPS[step].detail}…
+      </p>
     </div>
   )
 }
@@ -60,13 +69,14 @@ function PipelineProgress() {
 // Deliberately no format/module chips here: at send time the run's intent
 // (formula vs question) isn't known, so chips would mislabel plain questions.
 // The authoritative chips render on the FormulaReport from validated data.
-function BriefRow({ run }: { run: Run }) {
+function BriefRow({ run, index }: { run: Run; index: number }) {
   return (
-    <div className="flex items-baseline gap-3 flex-wrap">
-      <span className="text-[10px] font-semibold tracking-[0.14em] text-slate-400 uppercase shrink-0">
-        Brief
+    <div className="flex items-baseline gap-3 flex-wrap ff-rise pt-1">
+      <span className="text-[10px] font-semibold tracking-[0.14em] text-slate-400 uppercase shrink-0 num">
+        Brief {String(index).padStart(2, "0")}
       </span>
       <span className="text-sm font-medium text-slate-800">{run.content}</span>
+      <span className="flex-1 border-t border-dashed border-slate-200 translate-y-[-3px] hidden sm:block" aria-hidden />
     </div>
   )
 }
@@ -75,7 +85,7 @@ function AnswerBlock({ run }: { run: Run }) {
   if (run.formula) return <FormulaReport formula={run.formula} />
   if (run.rejection) return <RejectionReport rejection={run.rejection} />
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm text-slate-700 leading-relaxed">
+    <div className="rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm text-slate-700 leading-relaxed ff-rise">
       <Markdown text={run.content} />
     </div>
   )
@@ -84,10 +94,38 @@ function AnswerBlock({ run }: { run: Run }) {
 // ── Empty-state hero ──────────────────────────────────────────────────────────
 
 const TEMPLATES = [
-  { title: "Renal-safe vanilla", brief: "Renal-safe scoopable vanilla ice cream, potassium ≤ 200 mg per serving", modules: ["renal"] },
-  { title: "Diabetic low-sugar", brief: "Low-sugar diabetic-friendly frozen dessert with polyol sweetening", modules: ["diabetic"] },
-  { title: "High-protein recovery", brief: "High-protein frozen dessert for post-surgical recovery nutrition", modules: ["high_protein"] },
-  { title: "Vegan chocolate", brief: "Vegan chocolate frozen dessert on a coconut base", modules: ["vegan"] },
+  {
+    title: "Renal-safe vanilla",
+    brief: "Renal-safe scoopable vanilla ice cream, potassium ≤ 200 mg per serving",
+    modules: ["renal"],
+    Icon: ShieldCheck,
+  },
+  {
+    title: "Diabetic low-sugar",
+    brief: "Low-sugar diabetic-friendly frozen dessert with polyol sweetening",
+    modules: ["diabetic"],
+    Icon: FlaskConical,
+  },
+  {
+    title: "High-protein recovery",
+    brief: "High-protein frozen dessert for post-surgical recovery nutrition",
+    modules: ["high_protein"],
+    Icon: Zap,
+  },
+  {
+    title: "Vegan chocolate",
+    brief: "Vegan chocolate frozen dessert on a coconut base",
+    modules: ["vegan"],
+    Icon: Leaf,
+  },
+]
+
+const HERO_PIPELINE = [
+  { label: "Propose", detail: "LLM drafts structure" },
+  { label: "Resolve", detail: "governed library only" },
+  { label: "Compute", detail: "deterministic nutrition" },
+  { label: "Validate", detail: "physics + compliance" },
+  { label: "Score", detail: "texture & cost" },
 ]
 
 function Hero({
@@ -98,42 +136,81 @@ function Hero({
   onTemplate: (brief: string, modules: string[]) => void
 }) {
   return (
-    <div className="max-w-3xl mx-auto pt-10 sm:pt-16">
-      <p className="text-[11px] font-semibold tracking-[0.18em] text-teal-600 uppercase">
-        Constraint-verified formulation
-      </p>
-      <h1 className="text-3xl sm:text-4xl font-semibold text-slate-900 mt-2 leading-tight tracking-tight">
-        Frozen desserts that meet medical constraints —{" "}
-        <span className="text-slate-400">verified before you see them.</span>
-      </h1>
-      <p className="text-sm text-slate-500 mt-3 max-w-xl leading-relaxed">
-        The LLM proposes an ingredient structure. A deterministic food-science engine computes
-        every nutrient, checks freezing physics and compliance rules, and gates what reaches you.
-      </p>
+    <div className="max-w-3xl mx-auto pt-10 sm:pt-14 relative">
+      <div className="absolute -inset-x-10 -top-6 h-[420px] bg-blueprint pointer-events-none" aria-hidden />
+      <div className="relative">
+        <p className="text-[11px] font-semibold tracking-[0.18em] text-teal-600 uppercase ff-rise">
+          Constraint-verified formulation
+        </p>
+        <h1 className="text-3xl sm:text-[2.6rem] font-semibold text-slate-900 mt-2 leading-[1.12] tracking-tight ff-rise ff-rise-1">
+          Frozen desserts that meet medical constraints —{" "}
+          <span className="text-slate-400">verified before you see them.</span>
+        </h1>
+        <p className="text-sm text-slate-500 mt-3.5 max-w-xl leading-relaxed ff-rise ff-rise-2">
+          The LLM proposes an ingredient structure. A deterministic food-science engine computes
+          every nutrient, checks freezing physics and compliance rules, and gates what reaches you.
+        </p>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-8">
-        <StatTile label="Governed ingredients" value={meta?.ingredient_count ?? "—"} hint="USDA FDC nutrients + curated functional data" />
-        <StatTile label="Constraint modules" value={meta?.modules.length ?? "—"} hint="Declarative, versioned rulesets" />
-        <StatTile label="Checks per formula" value="12+" hint="Mass balance, physics bands, compliance limits" />
-        <StatTile label="LLM numbers trusted" value="0" hint="All nutrition computed by the domain engine" />
-      </div>
+        {/* Evidence strip — hairline-divided, reads like a spec sheet */}
+        <div className="mt-9 grid grid-cols-2 sm:grid-cols-4 rounded-2xl border border-slate-200 bg-white/70 backdrop-blur-sm divide-x divide-slate-100 max-sm:divide-y overflow-hidden ff-rise ff-rise-2">
+          {[
+            { value: meta?.ingredient_count ?? "—", label: "Governed ingredients", hint: "USDA FDC nutrients + curated functional data" },
+            { value: meta?.modules.length ?? "—", label: "Constraint modules", hint: "Declarative, versioned rulesets" },
+            { value: "12+", label: "Checks per formula", hint: "Mass balance, physics bands, compliance limits" },
+            { value: "0", label: "LLM numbers trusted", hint: "All nutrition computed by the domain engine" },
+          ].map((s) => (
+            <div key={s.label} className="px-4 py-3.5" title={s.hint}>
+              <div className="text-xl font-semibold text-slate-900 num font-mono leading-none">{s.value}</div>
+              <div className="text-[11px] font-medium text-slate-500 mt-1.5">{s.label}</div>
+            </div>
+          ))}
+        </div>
 
-      <h2 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mt-10 mb-2.5">
-        Start from a template
-      </h2>
-      <div className="grid sm:grid-cols-2 gap-2">
-        {TEMPLATES.map((t) => (
-          <button
-            key={t.title}
-            onClick={() => onTemplate(t.brief, t.modules)}
-            className="text-left rounded-xl border border-slate-200 bg-white px-4 py-3.5 hover:border-teal-300 hover:shadow-sm transition-all group"
-          >
-            <span className="block text-sm font-medium text-slate-800 group-hover:text-teal-700">
-              {t.title}
+        {/* The verification pipeline — the product's moat, stated up front */}
+        <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-950 text-slate-300 px-5 py-4 overflow-x-auto ff-rise ff-rise-3">
+          <div className="flex items-center gap-3 min-w-max">
+            <span className="text-[10px] font-semibold tracking-[0.14em] text-slate-500 uppercase shrink-0">
+              Pipeline
             </span>
-            <span className="block text-xs text-slate-400 mt-0.5 leading-relaxed">{t.brief}</span>
-          </button>
-        ))}
+            {HERO_PIPELINE.map((s, i) => (
+              <div key={s.label} className="flex items-center gap-3">
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-100 flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${i === 0 ? "bg-amber-400" : "bg-teal-400"}`} aria-hidden />
+                    {s.label}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">{s.detail}</div>
+                </div>
+                {i < HERO_PIPELINE.length - 1 && <span className="text-slate-600" aria-hidden>→</span>}
+              </div>
+            ))}
+            <span className="ml-2 text-[10px] text-slate-500 shrink-0">
+              <span className="text-amber-400">●</span> model &nbsp;<span className="text-teal-400">●</span> deterministic
+            </span>
+          </div>
+        </div>
+
+        <h2 className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] mt-10 mb-2.5 ff-rise ff-rise-3">
+          Start from a template
+        </h2>
+        <div className="grid sm:grid-cols-2 gap-2 ff-rise ff-rise-4">
+          {TEMPLATES.map((t) => (
+            <button
+              key={t.title}
+              onClick={() => onTemplate(t.brief, t.modules)}
+              className="text-left rounded-xl border border-slate-200 bg-white px-4 py-3.5 hover:border-teal-400/60 hover:shadow-[0_2px_12px_rgba(13,148,136,0.08)] transition-all group relative"
+            >
+              <span className="flex items-center gap-2">
+                <t.Icon className="w-3.5 h-3.5 text-teal-600" aria-hidden />
+                <span className="text-sm font-medium text-slate-800 group-hover:text-teal-800">
+                  {t.title}
+                </span>
+                <ArrowUpRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-teal-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform ml-auto" aria-hidden />
+              </span>
+              <span className="block text-xs text-slate-400 mt-1 leading-relaxed">{t.brief}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -265,6 +342,14 @@ export default function App() {
           }
         }
       }
+      // The stream can complete without emitting an answer (agent produced no
+      // output). Never leave the formulator staring at a silent feed.
+      if (!gotAnswer) {
+        setRuns((prev) => [...prev, {
+          role: "assistant",
+          content: "The run completed without a result. Try rephrasing the brief — e.g. start with *\"Create a formula for…\"* — or start a new session.",
+        }])
+      }
     } catch (err) {
       if ((err as Error).name === "AbortError") return
       if (!gotAnswer) {
@@ -289,15 +374,16 @@ export default function App() {
 
   const isEmpty = runs.length === 0
   const hasFormula = runs.some((r) => r.formula)
+  let briefNo = 0
 
   return (
     <div className="h-screen flex bg-slate-100">
       {/* ── Left rail: brief console ── */}
-      <aside className="hidden md:flex w-[300px] shrink-0 flex-col bg-slate-950 text-slate-200">
+      <aside className="hidden md:flex w-[300px] shrink-0 flex-col bg-slate-950 text-slate-200 bg-rail-glow print-hide">
         <div className="px-5 pt-5 pb-4 border-b border-white/10">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-teal-500 flex items-center justify-center shadow-[0_0_20px_rgba(20,184,166,0.35)]">
-              <span className="text-white font-bold text-sm">F</span>
+              <FlaskConical className="w-4 h-4 text-white" aria-hidden />
             </div>
             <div className="leading-none">
               <div className="font-semibold text-white text-sm tracking-tight">FormulaForge</div>
@@ -306,7 +392,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-5">
+        <div className="flex-1 overflow-y-auto px-5 py-5 rail-scroll">
           <BriefPanel
             modules={meta?.modules ?? []}
             selected={selectedModules}
@@ -319,10 +405,14 @@ export default function App() {
 
         {/* Brief input */}
         <div className="px-5 pb-5 pt-3 border-t border-white/10">
-          <label className="text-[10px] font-semibold tracking-[0.14em] text-slate-500 uppercase">
-            Formulation brief
-          </label>
+          <div className="flex items-baseline justify-between">
+            <label htmlFor="brief-input" className="text-[10px] font-semibold tracking-[0.14em] text-slate-500 uppercase">
+              Formulation brief
+            </label>
+            <span className="text-[9px] text-slate-600 border border-white/10 rounded px-1 py-px" aria-hidden>↵ to run</span>
+          </div>
           <textarea
+            id="brief-input"
             rows={3}
             value={input}
             disabled={loading}
@@ -362,19 +452,22 @@ export default function App() {
       {/* ── Main canvas ── */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="shrink-0 bg-white/80 backdrop-blur border-b border-slate-200">
+        <header className="shrink-0 bg-white/80 backdrop-blur border-b border-slate-200 print-hide">
           <div className="px-4 sm:px-8 h-12 flex items-center justify-between">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="md:hidden w-6 h-6 rounded-md bg-teal-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0">F</span>
+              <span className="md:hidden w-6 h-6 rounded-md bg-teal-500 flex items-center justify-center shrink-0">
+                <FlaskConical className="w-3 h-3 text-white" aria-hidden />
+              </span>
               <span className="text-xs font-medium text-slate-700">Formulation workspace</span>
             </div>
             <div className="flex items-center gap-2 text-[10px]">
               <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-100 text-slate-500">
-                <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-500" aria-hidden />
                 Validation gate active
               </span>
               {meta && (
-                <span className="hidden lg:inline px-2 py-1 rounded-full bg-slate-100 text-slate-500">
+                <span className="hidden lg:inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-100 text-slate-500 num">
+                  <Database className="w-3 h-3" aria-hidden />
                   Dataset {meta.dataset_version} · {meta.ingredient_count} ingredients
                 </span>
               )}
@@ -401,10 +494,10 @@ export default function App() {
             {isEmpty ? (
               <Hero meta={meta} onTemplate={handleTemplate} />
             ) : (
-              <div className="space-y-5">
+              <div className="space-y-5" role="log" aria-live="polite">
                 {runs.map((run, i) =>
                   run.role === "user" ? (
-                    <BriefRow key={i} run={run} />
+                    <BriefRow key={i} run={run} index={++briefNo} />
                   ) : (
                     <AnswerBlock key={i} run={run} />
                   )
@@ -418,7 +511,7 @@ export default function App() {
 
         {/* Refine bar (appears once a formula exists) */}
         {hasFormula && (
-          <div className="shrink-0 border-t border-slate-200 bg-white">
+          <div className="shrink-0 border-t border-slate-200 bg-white print-hide">
             <div className="px-4 sm:px-8 py-3 max-w-4xl mx-auto w-full flex gap-2">
               <input
                 value={followUp}
@@ -430,6 +523,7 @@ export default function App() {
                   }
                 }}
                 placeholder="Refine the formula — e.g. “now make it dairy-free” or “reduce potassium 15%”"
+                aria-label="Refine the formula"
                 className="flex-1 px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent placeholder:text-slate-400 transition-colors"
               />
               <button
@@ -448,7 +542,7 @@ export default function App() {
         )}
 
         {/* Mobile brief input (rail hidden below md) */}
-        <div className="md:hidden shrink-0 border-t border-slate-200 bg-white px-4 py-3 flex gap-2">
+        <div className="md:hidden shrink-0 border-t border-slate-200 bg-white px-4 py-3 flex gap-2 print-hide">
           <input
             value={input}
             disabled={loading}
@@ -459,6 +553,7 @@ export default function App() {
               }
             }}
             placeholder="Describe a formulation target…"
+            aria-label="Formulation brief"
             className="flex-1 px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-400 placeholder:text-slate-400"
           />
           <button

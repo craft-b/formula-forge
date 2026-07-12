@@ -299,6 +299,17 @@ async def _stream_agent(
                     else:
                         streamed_text += token
                         yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+                elif kind == "on_chain_end" and (node == "formula_agent" or event.get("name") == "formula_agent"):
+                    # Groq JSON mode does not stream, so on_chat_model_stream
+                    # never fires for formula runs — recover the node's final
+                    # AIMessage here or the run would end silently. The raw
+                    # text still passes through the domain validation gate.
+                    output = (event.get("data") or {}).get("output") or {}
+                    messages = output.get("messages") if isinstance(output, dict) else None
+                    if messages:
+                        content = getattr(messages[-1], "content", "") or ""
+                        if content:
+                            formula_buffer = content
 
             if is_formula_run and formula_buffer:
                 # The validation gate: no path emits LLM numbers to the client.
