@@ -167,7 +167,7 @@ export function FormulaReport({ formula }: { formula: ValidatedFormula }) {
                 </span>
               ))}
             </div>
-            <h3 className="text-xl font-semibold text-slate-900 mt-1.5 leading-snug tracking-tight">
+            <h3 className="font-heading text-[1.35rem] font-semibold text-slate-900 mt-1.5 leading-snug tracking-[-0.01em]">
               {formula.product_name}
             </h3>
             {formula.description && (
@@ -443,7 +443,7 @@ export function RejectionReport({ rejection }: { rejection: RejectedFormula }) {
             <span className="text-[10px] font-semibold tracking-[0.14em] text-red-400 uppercase">
               Verification failed
             </span>
-            <h3 className="text-base font-semibold text-red-900 mt-0.5">{rejection.product_name}</h3>
+            <h3 className="font-heading text-base font-semibold text-red-900 mt-0.5">{rejection.product_name}</h3>
           </div>
           <StatusPill ok={false}>Rejected</StatusPill>
         </div>

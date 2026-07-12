@@ -3,6 +3,7 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
+@import "@fontsource-variable/fraunces";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -58,7 +59,9 @@ body {
 }
 
 @theme inline {
-  --font-heading: var(--font-sans);
+  /* Anchor headline font: one distinctive editorial serif reserved for the
+     hero and report titles; Geist (sans) and Geist Mono (data) support it. */
+  --font-heading: 'Fraunces Variable', Georgia, serif;
   --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Geist Mono Variable', ui-monospace, 'SFMono-Regular', monospace;
   --color-sidebar-ring: var(--sidebar-ring);
@@ -134,8 +137,17 @@ body {
       radial-gradient(oklch(0.208 0.042 265.755 / 5%) 1px, transparent 1px);
     background-size: 22px 22px;
   }
+  /* Scrollable strip that keeps its scrollbar out of sight. */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  /* Teal glow + faint grain: subtle depth that doesn't compete with content. */
   .bg-rail-glow {
     background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"),
       radial-gradient(60% 40% at 50% 0%, oklch(0.704 0.14 182.503 / 7%), transparent 70%);
   }
 }

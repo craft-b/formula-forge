@@ -149,7 +149,7 @@ function Hero({
         <p className="text-[11px] font-semibold tracking-[0.18em] text-teal-600 uppercase ff-rise">
           Constraint-verified formulation
         </p>
-        <h1 className="text-3xl sm:text-[2.6rem] font-semibold text-slate-900 mt-2 leading-[1.12] tracking-tight ff-rise ff-rise-1">
+        <h1 className="font-heading text-3xl sm:text-[2.7rem] font-semibold text-slate-900 mt-2 leading-[1.12] tracking-[-0.015em] ff-rise ff-rise-1">
           Frozen desserts that meet medical constraints —{" "}
           <span className="text-slate-400">verified before you see them.</span>
         </h1>
@@ -174,7 +174,7 @@ function Hero({
         </div>
 
         {/* The verification pipeline — the product's moat, stated up front */}
-        <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-950 text-slate-300 px-5 py-4 overflow-x-auto ff-rise ff-rise-3">
+        <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-950 text-slate-300 px-5 py-4 overflow-x-auto no-scrollbar ff-rise ff-rise-3">
           <div className="flex items-center gap-3 min-w-max">
             <span className="text-[10px] font-semibold tracking-[0.14em] text-slate-500 uppercase shrink-0">
               Pipeline
@@ -191,8 +191,10 @@ function Hero({
                 {i < HERO_PIPELINE.length - 1 && <span className="text-slate-600" aria-hidden>→</span>}
               </div>
             ))}
-            <span className="ml-2 text-[10px] text-slate-500 shrink-0">
-              <span className="text-amber-400">●</span> model &nbsp;<span className="text-teal-400">●</span> deterministic
+          </div>
+          <div className="flex justify-end mt-2 min-w-max">
+            <span className="text-[10px] text-slate-500">
+              <span className="text-amber-400">●</span> model &nbsp;<span className="text-teal-400">●</span> deterministic — the gate between them is the product
             </span>
           </div>
         </div>
