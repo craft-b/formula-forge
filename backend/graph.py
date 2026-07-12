@@ -27,8 +27,12 @@ _FORMULATION_RE = re.compile(
 )
 
 
-class AgentState(TypedDict):
+class AgentState(TypedDict, total=False):
     messages: List
+    # Explicit routing override from the UI ("formulate"). The brief-builder's
+    # "Generate verified formula" CTA must never fall through to Q&A because
+    # the intent regex didn't match the user's phrasing.
+    intent: Optional[str]
 
 
 def detect_intent(message: str) -> Literal["formulate", "search"]:
@@ -125,6 +129,8 @@ def orchestrator(state: AgentState):
 
 
 def route(state: AgentState) -> Literal["formula_agent", "rag_agent"]:
+    if state.get("intent") == "formulate":
+        return "formula_agent"
     user_messages = [m for m in state["messages"] if isinstance(m, HumanMessage)]
     if user_messages:
         return "formula_agent" if detect_intent(user_messages[-1].content) == "formulate" else "rag_agent"

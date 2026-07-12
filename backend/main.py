@@ -214,6 +214,10 @@ class ChatRequest(BaseModel):
     # formula runs (overrides the LLM's guess); ignored for RAG questions, so a
     # question is never polluted with formulation settings.
     product_format: Optional[str] = None
+    # Explicit routing intent. "formulate" forces the formula path — the UI's
+    # "Generate verified formula" CTA must never fall through to Q&A because the
+    # keyword regex missed the phrasing. Anything else means auto-detect.
+    intent: Optional[str] = None
 
 
 @app.get("/api/meta")
@@ -249,6 +253,7 @@ def health():
 async def _stream_agent(
     history: list, session_id: str, active_modules: Optional[list] = None,
     iteration_parent: Optional[str] = None, product_format: Optional[str] = None,
+    force_formulate: bool = False,
 ) -> AsyncGenerator[str, None]:
     """SSE generator that streams LLM tokens to the client.
 
@@ -285,7 +290,10 @@ async def _stream_agent(
             formula_buffer = ""
             streamed_text = ""
             is_formula_run = False
-            async for event in agent.astream_events({"messages": history}, version="v2"):
+            graph_input = {"messages": history}
+            if force_formulate:
+                graph_input["intent"] = "formulate"
+            async for event in agent.astream_events(graph_input, version="v2"):
                 kind = event["event"]
                 node = event.get("metadata", {}).get("langgraph_node", "")
                 if kind == "on_chain_start" and node == "formula_agent":
@@ -365,7 +373,7 @@ async def chat(request: Request, req: ChatRequest):
 
     return StreamingResponse(
         _stream_agent(history, session_id, active_modules, iteration_parent,
-                      product_format),
+                      product_format, force_formulate=req.intent == "formulate"),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

@@ -15,6 +15,8 @@ interface Run {
   content: string
   formula?: ValidatedFormula
   rejection?: RejectedFormula
+  /** Footnote shown when a run behaved differently than the user likely expected. */
+  hint?: string
 }
 
 // ── Pipeline progress (shown while a run is in flight) ───────────────────────
@@ -87,6 +89,11 @@ function AnswerBlock({ run }: { run: Run }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm text-slate-700 leading-relaxed ff-rise">
       <Markdown text={run.content} />
+      {run.hint && (
+        <p className="mt-3 pt-3 border-t border-slate-100 text-[11px] text-amber-700 bg-amber-50/60 -mx-6 -mb-4 px-6 py-2.5 rounded-b-2xl">
+          {run.hint}
+        </p>
+      )}
     </div>
   )
 }
@@ -258,7 +265,10 @@ export default function App() {
     setLoading(false)
   }
 
-  async function sendMessage(text: string, moduleOverride?: string[]) {
+  // intent "formulate" forces the backend's formula path — used by the
+  // "Generate verified formula" CTA and templates so they can never fall
+  // through to a plain Q&A answer that ignores the constraint modules.
+  async function sendMessage(text: string, moduleOverride?: string[], intent?: "formulate") {
     if (!text.trim() || loading) return
     const modules = moduleOverride ?? Array.from(selectedModules)
 
@@ -270,6 +280,7 @@ export default function App() {
     const controller = new AbortController()
     abortRef.current = controller
     let gotAnswer = false
+    let answerKind: "tokens" | "structured" | null = null
 
     try {
       const res = await fetch(`${API_URL}/api/chat`, {
@@ -280,6 +291,7 @@ export default function App() {
           session_id: sessionId,
           modules,
           product_format: format,
+          intent: intent ?? null,
         }),
         signal: controller.signal,
       })
@@ -315,6 +327,7 @@ export default function App() {
 
           if (event.type === "token") {
             const content = event.content
+            answerKind ??= "tokens"
             if (!gotAnswer) {
               gotAnswer = true
               setRuns((prev) => [...prev, { role: "assistant", content }])
@@ -330,12 +343,15 @@ export default function App() {
             }
           } else if (event.type === "formula") {
             gotAnswer = true
+            answerKind = "structured"
             setRuns((prev) => [...prev, { role: "assistant", content: event.response, formula: event.formula }])
           } else if (event.type === "rejection") {
             gotAnswer = true
+            answerKind = "structured"
             setRuns((prev) => [...prev, { role: "assistant", content: event.response, rejection: event.rejection }])
           } else if (event.type === "error") {
             gotAnswer = true
+            answerKind = "structured"
             setRuns((prev) => [...prev, { role: "assistant", content: event.message }])
           } else if (event.type === "done") {
             setSessionId(event.session_id)
@@ -350,6 +366,21 @@ export default function App() {
           content: "The run completed without a result. Try rephrasing the brief — e.g. start with *\"Create a formula for…\"* — or start a new session.",
         }])
       }
+      // Transparency: the brief was answered as a question, but constraint
+      // modules were selected — tell the formulator why no report appeared.
+      if (answerKind === "tokens" && modules.length > 0 && intent !== "formulate") {
+        setRuns((prev) => {
+          const next = [...prev]
+          const last = next[next.length - 1]
+          if (last?.role === "assistant" && !last.formula && !last.rejection) {
+            next[next.length - 1] = {
+              ...last,
+              hint: "This was answered as a question, so the selected constraint modules were not applied. Use “Generate verified formula” or start the brief with “Create a formula for…” to run the verified pipeline.",
+            }
+          }
+          return next
+        })
+      }
     } catch (err) {
       if ((err as Error).name === "AbortError") return
       if (!gotAnswer) {
@@ -363,7 +394,7 @@ export default function App() {
 
   function handleTemplate(brief: string, modules: string[]) {
     setSelectedModules(new Set(modules))
-    void sendMessage(brief, modules)
+    void sendMessage(brief, modules, "formulate")
   }
 
   function handleClear() {
@@ -420,7 +451,7 @@ export default function App() {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault()
-                void sendMessage(input)
+                void sendMessage(input, undefined, "formulate")
               }
             }}
             placeholder="e.g. Renal-safe scoopable vanilla, K ≤ 200 mg/serving…"
@@ -435,7 +466,7 @@ export default function App() {
             </button>
           ) : (
             <button
-              onClick={() => void sendMessage(input)}
+              onClick={() => void sendMessage(input, undefined, "formulate")}
               disabled={!input.trim()}
               className="mt-2 w-full rounded-xl bg-teal-500 text-white text-xs font-semibold py-2.5 hover:bg-teal-400 disabled:opacity-40 disabled:hover:bg-teal-500 transition-colors"
             >
