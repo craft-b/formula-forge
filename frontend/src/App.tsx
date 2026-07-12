@@ -460,7 +460,7 @@ export default function App() {
       {/* ── Left rail: brief console ── */}
       <aside className="hidden md:flex w-[300px] shrink-0 flex-col bg-slate-950 text-slate-200 bg-rail-glow print-hide">
         <div className="px-5 pt-5 pb-4 border-b border-white/10">
-          <div className="flex items-center gap-2.5">
+          <a href="/" className="flex items-center gap-2.5" title="About FormulaForge">
             <div className="w-8 h-8 rounded-lg bg-teal-500 flex items-center justify-center shadow-[0_0_20px_rgba(20,184,166,0.35)]">
               <FlaskConical className="w-4 h-4 text-white" aria-hidden />
             </div>
@@ -468,7 +468,7 @@ export default function App() {
               <div className="font-semibold text-white text-sm tracking-tight">FormulaForge</div>
               <div className="text-[10px] text-slate-500 mt-1">Formulation intelligence</div>
             </div>
-          </div>
+          </a>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-5 rail-scroll">
