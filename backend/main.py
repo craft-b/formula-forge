@@ -100,6 +100,20 @@ def _repair_feedback(result) -> str:
     """Build repair instructions from a failed first attempt for the reprompt."""
     if result is None:
         return "The previous response was not valid JSON. Return a single JSON object."
+    if result.type == "formula":
+        # Computable but non-compliant: feed the measured-vs-limit failures back.
+        parts = ["The formula computed successfully but FAILED these active "
+                 "dietary constraints:"]
+        for v in result.validation.violations or []:
+            if v.severity != "error":
+                continue
+            detail = v.explanation
+            if v.measured is not None and v.limit is not None:
+                detail += f" (measured {v.measured}, limit {v.limit})"
+            parts.append(detail)
+        parts.append("Rework the ingredient structure and percentages to satisfy "
+                     "every constraint.")
+        return " ".join(parts)
     parts = [result.reason]
     if getattr(result, "unresolved_ingredients", None):
         parts.append("These ingredients are not in the allowed list and must be "
@@ -107,6 +121,13 @@ def _repair_feedback(result) -> str:
     for v in getattr(result, "violations", []):
         parts.append(v.explanation)
     return " ".join(parts)
+
+
+def _compliance_errors(result) -> int:
+    """Count error-severity violations on a validated formula (∞-ish otherwise)."""
+    if result is None or result.type != "formula":
+        return 10_000
+    return sum(1 for v in (result.validation.violations or []) if v.severity == "error")
 
 
 def _summarize_formula(vf) -> str:
@@ -120,19 +141,25 @@ def _resolve_formula(raw_text: str, active_modules, user_message: str,
                      product_format: Optional[str] = None):
     """Parse + validate a formula, with exactly one repair re-prompt on failure.
 
-    Repair regenerates via the iteration prompt when a parent is present, else a
-    fresh generation. Computable-but-non-compliant formulas are returned flagged
-    (not repaired) so the user sees the verification surface.
+    Repair fires when the attempt can't be parsed/resolved OR when it computed
+    but failed compliance (error-severity violations) — the measured-vs-limit
+    numbers are fed back so the retry designs toward the limits. If the retry
+    is no better, the attempt with fewer compliance errors is returned, still
+    honestly flagged. Never more than one repair call (cost control).
     """
     result = _parse_and_validate(raw_text, active_modules, product_format)
-    if result is not None and result.type == "formula":
+    if result is not None and result.type == "formula" and result.validation.passed:
         return result
     try:
         feedback = _repair_feedback(result)
-        repaired = (iterate_formula(user_message, parent, feedback) if parent
-                    else regenerate_formula(user_message, feedback))
+        repaired = (iterate_formula(user_message, parent, feedback,
+                                    modules=active_modules) if parent
+                    else regenerate_formula(user_message, feedback,
+                                            modules=active_modules))
         retry = _parse_and_validate(repaired, active_modules, product_format)
-        if retry is not None and (result is None or retry.type == "formula"):
+        if retry is not None and _compliance_errors(retry) < _compliance_errors(result):
+            result = retry
+        elif retry is not None and result is None:
             result = retry
     except Exception:
         logger.exception("Formula repair re-prompt failed")
@@ -281,7 +308,8 @@ async def _stream_agent(
     try:
         if iteration_parent is not None:
             # Modify the existing formula from the delta request (F7).
-            raw = iterate_formula(user_message, iteration_parent)
+            raw = iterate_formula(user_message, iteration_parent,
+                                  modules=active_modules)
             result = _resolve_formula(raw, active_modules, user_message,
                                       parent=iteration_parent,
                                       product_format=product_format)
@@ -291,7 +319,7 @@ async def _stream_agent(
             formula_buffer = ""
             streamed_text = ""
             is_formula_run = False
-            graph_input = {"messages": history}
+            graph_input = {"messages": history, "modules": active_modules}
             if force_formulate:
                 graph_input["intent"] = "formulate"
             async for event in agent.astream_events(graph_input, version="v2"):

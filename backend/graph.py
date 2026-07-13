@@ -33,6 +33,9 @@ class AgentState(TypedDict, total=False):
     # "Generate verified formula" CTA must never fall through to Q&A because
     # the intent regex didn't match the user's phrasing.
     intent: Optional[str]
+    # Active dietary-constraint module ids — rendered into the formula prompt
+    # as design targets so proposals aim at the limits the gate will enforce.
+    modules: Optional[List[str]]
 
 
 def detect_intent(message: str) -> Literal["formulate", "search"]:
@@ -184,8 +187,49 @@ def _allowed_ingredient_lines() -> str:
     return "\n".join(f"- {ing.name}" for ing in get_repository().ingredients)
 
 
+def constraint_brief(modules: Optional[List[str]]) -> str:
+    """Render the active rulesets' targets as design guidance for the prompt.
+
+    The domain layer stays the only *evaluator* — this does not move constraint
+    logic into prose. It renders the same versioned, declarative ruleset data
+    the gate will enforce, so the model designs toward the limits instead of
+    discovering them by rejection. Single source of truth is preserved: change
+    a ruleset JSON and the prompt guidance changes with it.
+    """
+    if not modules:
+        return ""
+    from domain import get_ruleset
+    lines: list[str] = []
+    for mid in modules:
+        rs = get_ruleset(mid)
+        if not rs or rs.get("stub"):
+            continue
+        for lim in rs.get("nutrient_limits", []):
+            basis = "per serving" if lim.get("basis", "per_serving") == "per_serving" else "per 100 g"
+            field = lim["field"].replace("_", " ")
+            if "max" in lim:
+                lines.append(f"- {field} must be ≤ {lim['max']} {basis}. {lim['explanation']}")
+            if "min" in lim:
+                lines.append(f"- {field} must be ≥ {lim['min']} {basis}. {lim['explanation']}")
+        for role in rs.get("ingredient_blacklist_roles", []):
+            lines.append(f"- No ingredients with role '{role}' ({rs['label']}).")
+        for allergen in rs.get("allergen_blacklist", []):
+            lines.append(f"- No ingredients containing allergen '{allergen}' ({rs['label']}).")
+    if not lines:
+        return ""
+    return (
+        "\n\nACTIVE DIETARY CONSTRAINTS — the finished formula MUST satisfy every "
+        "one of these. The system computes real nutrition from the ingredient "
+        "database and will flag any violation, so choose ingredients and "
+        "percentages that meet the limits:\n" + "\n".join(lines)
+    )
+
+
 def build_formula_messages(
-    user_message: str, feedback: Optional[str] = None, parent: Optional[str] = None
+    user_message: str,
+    feedback: Optional[str] = None,
+    parent: Optional[str] = None,
+    modules: Optional[List[str]] = None,
 ) -> list:
     """Build the formula-generation prompt.
 
@@ -197,6 +241,10 @@ def build_formula_messages(
     user's message is treated as a delta to apply — this is what lets follow-ups
     like "now make it dairy-free" modify the existing formula instead of
     generating from nothing (F7).
+
+    When `modules` is given, the active rulesets' numeric targets are rendered
+    into the prompt (see constraint_brief) so the proposal is designed toward
+    the limits the validation gate enforces.
     """
     allowed = _allowed_ingredient_lines()
     task = f"Create a frozen-dessert formula for: {user_message}"
@@ -207,6 +255,7 @@ def build_formula_messages(
             f"REQUESTED CHANGE: {user_message}\n"
             f"Keep everything else as close to the current formula as possible."
         )
+    task += constraint_brief(modules)
     repair = ""
     if feedback:
         repair = (
@@ -245,19 +294,23 @@ def _invoke_formula(messages: list) -> str:
     return extract_json_block(response.content)
 
 
-def regenerate_formula(user_message: str, feedback: str) -> str:
+def regenerate_formula(user_message: str, feedback: str,
+                       modules: Optional[List[str]] = None) -> str:
     """One repair re-prompt: regenerate a formula given validation feedback.
 
     Called by the API layer when the first attempt cannot be resolved/validated
     into a usable formula. Returns raw JSON (still validated downstream).
     """
-    return _invoke_formula(build_formula_messages(user_message, feedback=feedback))
+    return _invoke_formula(
+        build_formula_messages(user_message, feedback=feedback, modules=modules))
 
 
-def iterate_formula(user_message: str, parent: str, feedback: Optional[str] = None) -> str:
+def iterate_formula(user_message: str, parent: str, feedback: Optional[str] = None,
+                    modules: Optional[List[str]] = None) -> str:
     """Generate a modified formula from a parent formula and a delta request."""
     return _invoke_formula(
-        build_formula_messages(user_message, feedback=feedback, parent=parent))
+        build_formula_messages(user_message, feedback=feedback, parent=parent,
+                               modules=modules))
 
 
 def formula_agent(state: AgentState):
@@ -269,7 +322,8 @@ def formula_agent(state: AgentState):
     """
     user_messages = [m for m in state["messages"] if isinstance(m, HumanMessage)]
     user_message = user_messages[-1].content
-    raw = _invoke_formula(build_formula_messages(user_message))
+    raw = _invoke_formula(
+        build_formula_messages(user_message, modules=state.get("modules")))
     return {"messages": state["messages"] + [AIMessage(content=raw)]}
 
 

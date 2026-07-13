@@ -377,6 +377,10 @@ export default function App() {
             gotAnswer = true
             answerKind = "structured"
             setRuns((prev) => [...prev, { role: "assistant", content: event.response, formula: event.formula }])
+            // The backend unions rail toggles with modules detected in the brief
+            // text; reflect what was actually enforced so the rail never lies.
+            const enforced = event.formula.validation.active_modules
+            if (enforced) setSelectedModules(new Set(enforced))
           } else if (event.type === "rejection") {
             gotAnswer = true
             answerKind = "structured"
