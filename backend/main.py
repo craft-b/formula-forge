@@ -328,9 +328,12 @@ async def _stream_agent(
             else:
                 conversation_store[session_id] = history + [AIMessage(content=streamed_text)]
 
-    except Exception:
+    except Exception as exc:
         logger.exception("Streaming failed for session %s", session_id)
-        yield f"data: {json.dumps({'type': 'error', 'message': 'The formulation agent encountered an error. Please try again.'})}\n\n"
+        # Exception class only — safe to surface (no message content, so no
+        # secrets), and it turns "something broke" into a reportable signal.
+        detail = type(exc).__name__
+        yield f"data: {json.dumps({'type': 'error', 'message': f'The formulation agent encountered an error ({detail}). Please try again.'})}\n\n"
 
     yield f"data: {json.dumps({'type': 'done', 'session_id': session_id})}\n\n"
     yield "data: [DONE]\n\n"
