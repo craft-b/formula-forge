@@ -16,7 +16,7 @@ from slowapi.util import get_remote_address
 
 # config import is the single .env load point (F15); must precede graph import
 # because graph.py calls get_llm() at module level.
-from config import settings
+from config import groq_key_fingerprint, settings
 
 from graph import (
     agent,
@@ -173,8 +173,9 @@ async def lifespan(app: FastAPI):
     # graph.py builds and compiles the LangGraph at import time above,
     # so by the time the first request arrives the graph is already warm.
     logger.info(
-        "FormulaForge startup: LangGraph agent ready | LangSmith tracing %s",
+        "FormulaForge startup: LangGraph agent ready | LangSmith tracing %s | GROQ key %s",
         "ENABLED" if settings.langchain_tracing_v2 else "disabled",
+        groq_key_fingerprint(),
     )
     yield
 

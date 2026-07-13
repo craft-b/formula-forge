@@ -8,10 +8,27 @@ import-ordering trap between main.py and llm.py.
 """
 from __future__ import annotations
 
+import os
+
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 load_dotenv()
+
+# Dashboard-pasted secrets routinely pick up stray whitespace or wrapping
+# quotes that turn a valid key into an AuthenticationError. Normalize once,
+# here at the single load point.
+_raw_key = os.getenv("GROQ_API_KEY")
+if _raw_key:
+    os.environ["GROQ_API_KEY"] = _raw_key.strip().strip("\"'").strip()
+
+
+def groq_key_fingerprint() -> str:
+    """Safe-to-log identity of the key the process actually sees."""
+    key = os.getenv("GROQ_API_KEY", "")
+    if not key:
+        return "MISSING"
+    return f"len={len(key)} prefix={key[:7]} suffix={key[-4:]}"
 
 
 class Settings(BaseSettings):
