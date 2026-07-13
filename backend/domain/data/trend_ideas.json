@@ -1,0 +1,248 @@
+{
+  "dataset_version": "2026.07.0",
+  "updated": "2026-07-13",
+  "methodology": "Curated consumer-trend-intelligence corpus. Signals are analyst-normalized 0-100 from social listening (TikTok/Reddit volume and growth), artisan shop menus, brand launch activity, and published trend reports. Every idea carries attributed sources. Scores are computed deterministically by the ranking engine (see scoring weights) — no LLM judgment in the ranking.",
+  "scoring": {
+    "version": "1.0.0",
+    "weights": {"social": 0.25, "momentum": 0.25, "breadth": 0.15, "adoption": 0.20, "feasibility": 0.15},
+    "adoption_curve": {"emerging": 55, "artisan": 70, "expanding": 85, "mass": 60},
+    "notes": "adoption rewards the artisan-to-mainstream expansion window (proven demand, remaining whitespace); mass = saturated, emerging = unproven. feasibility = how well the governed ingredient library can express the concept today."
+  },
+  "ideas": [
+    {
+      "id": "dubai_chocolate_pistachio",
+      "title": "Dubai-Chocolate Pistachio Kataifi",
+      "concept": "Pistachio-tahini ice cream with chocolate shell shards and toasted kataifi crunch — the viral 'Dubai chocolate' profile as a scoopable format.",
+      "tags": ["nutty", "texture", "viral"],
+      "lifecycle": "expanding",
+      "signals": {"social": 96, "momentum": 88, "feasibility": 70},
+      "sources": [
+        {"type": "tiktok", "name": "TikTok #dubaichocolate", "note": "search volume +450% YoY, sustained through 2026"},
+        {"type": "report", "name": "IFT Outlook 2026", "note": "named a durable 'flavor platform': pistachio + texture + chocolate"},
+        {"type": "brand", "name": "Ben & Jerry's / FIX copycats", "note": "mass-brand entries landing 2025-26"},
+        {"type": "reddit", "name": "r/icecream", "note": "recurring homemade kataifi-shell threads"}
+      ],
+      "suggested_brief": "Premium pistachio ice cream with tahini notes and a crunchy kataifi-style inclusion, chocolate shard ripple",
+      "module_fits": []
+    },
+    {
+      "id": "protein_creami_culture",
+      "title": "High-Protein 'Creami-Style' Pints",
+      "concept": "20-30 g protein per serving, low-sugar scoopable pints riding the Ninja Creami home-churn culture into retail.",
+      "tags": ["protein", "functional"],
+      "lifecycle": "expanding",
+      "signals": {"social": 90, "momentum": 85, "feasibility": 95},
+      "sources": [
+        {"type": "reddit", "name": "r/ninjacreami", "note": "500k+ members trading protein-pint recipes"},
+        {"type": "report", "name": "Innova retail scan 2026", "note": "protein-forward frozen launches 10-30 g/serving"},
+        {"type": "brand", "name": "Legendary / Halo Top wave 2", "note": "reformulated protein lines shipping"},
+        {"type": "report", "name": "WholeFoods Mag functional 2026", "note": "GLP-1-adjacent satiety positioning"}
+      ],
+      "suggested_brief": "High-protein vanilla frozen dessert, at least 20 g protein per serving, low sugar, scoopable at freezer temp",
+      "module_fits": ["high_protein", "diabetic"]
+    },
+    {
+      "id": "sweet_corn",
+      "title": "Sweet Corn & Salted Butter",
+      "concept": "Sweet corn ice cream with brown-butter notes — trend reports' pick for 2026's breakout flavor, already on artisan menus.",
+      "tags": ["nostalgia", "savory-sweet"],
+      "lifecycle": "artisan",
+      "signals": {"social": 62, "momentum": 82, "feasibility": 75},
+      "sources": [
+        {"type": "report", "name": "IFT Outlook 2026", "note": "sweet corn named flavor/ingredient of 2026"},
+        {"type": "artisan", "name": "Salt & Straw-tier seasonal menus", "note": "corn flavors recurring summer slots"},
+        {"type": "tiktok", "name": "TikTok corn-dessert format", "note": "corn soft-serve clips from Asia going global"}
+      ],
+      "suggested_brief": "Premium sweet corn ice cream with brown butter character and a clean dairy finish",
+      "module_fits": []
+    },
+    {
+      "id": "swicy_mango_habanero",
+      "title": "Swicy Mango-Habanero Sorbet",
+      "concept": "Fruit-forward heat: mango sorbet with a controlled habanero warmth — the 'swicy' profile in its most freezer-friendly format.",
+      "tags": ["swicy", "fruit", "dairy-free"],
+      "lifecycle": "expanding",
+      "signals": {"social": 78, "momentum": 74, "feasibility": 60},
+      "sources": [
+        {"type": "report", "name": "IFT Outlook 2026", "note": "'fruit-forward heat' called out: mango/guava × habanero/chipotle"},
+        {"type": "brand", "name": "Van Leeuwen limited drops", "note": "hot-honey and chili collabs testing the space"},
+        {"type": "tiktok", "name": "#swicy", "note": "sustained multi-year growth"}
+      ],
+      "suggested_brief": "Vegan mango sorbet with mild habanero heat, dairy-free, scoopable",
+      "module_fits": ["vegan"]
+    },
+    {
+      "id": "cottage_cheese_base",
+      "title": "Whipped Cottage-Cheese Base",
+      "concept": "Cottage cheese as the protein-and-texture base — clean label, high protein, riding 14.6% YoY growth in frozen contexts.",
+      "tags": ["protein", "clean-label"],
+      "lifecycle": "artisan",
+      "signals": {"social": 80, "momentum": 70, "feasibility": 80},
+      "sources": [
+        {"type": "report", "name": "Tastewise frozen 2026", "note": "cottage cheese +14.6% YoY in high-protein frozen"},
+        {"type": "tiktok", "name": "cottage-cheese ice cream format", "note": "viral 2024, normalized into recipe canon"},
+        {"type": "reddit", "name": "r/Volumeeating", "note": "staple recipe category"}
+      ],
+      "suggested_brief": "High-protein frozen dessert built on a fresh dairy protein base, berry ripple, low sugar",
+      "module_fits": ["high_protein", "diabetic"]
+    },
+    {
+      "id": "tiramisu",
+      "title": "Tiramisu Revival",
+      "concept": "Coffee, cocoa, and mascarpone in a not-too-sweet layered pint — tiramisu is 2026's top 'newstalgia' dessert flavor.",
+      "tags": ["nostalgia", "coffee"],
+      "lifecycle": "expanding",
+      "signals": {"social": 72, "momentum": 68, "feasibility": 85},
+      "sources": [
+        {"type": "report", "name": "MarketPlace 2026 predictions", "note": "tiramisu named across dessert categories"},
+        {"type": "artisan", "name": "Gelato shop menus", "note": "perennial top-5 gelato flavor, renewed placement"},
+        {"type": "brand", "name": "Mid-size pint launches", "note": "layered tiramisu SKUs shipping 2026"}
+      ],
+      "suggested_brief": "Gelato-style tiramisu frozen dessert: coffee-soaked note, cocoa dusting character, mascarpone richness, moderate sweetness",
+      "module_fits": []
+    },
+    {
+      "id": "ube_purple_yam",
+      "title": "Ube Coconut Swirl",
+      "concept": "Filipino purple yam with coconut — vivid color, gentle sweetness; long artisan run now crossing into mass retail.",
+      "tags": ["ube", "coconut", "color"],
+      "lifecycle": "expanding",
+      "signals": {"social": 70, "momentum": 58, "feasibility": 65},
+      "sources": [
+        {"type": "artisan", "name": "Wanderlust Creamery et al.", "note": "signature flavor with national pull"},
+        {"type": "brand", "name": "Trader Joe's / grocery private label", "note": "ube SKUs recurring"},
+        {"type": "tiktok", "name": "#ube", "note": "steady color-driven engagement"}
+      ],
+      "suggested_brief": "Ube-style purple yam frozen dessert on a coconut base, vegan, vivid natural color",
+      "module_fits": ["vegan"]
+    },
+    {
+      "id": "gut_health_prebiotic",
+      "title": "Gut-Health Prebiotic Pint",
+      "concept": "Live-culture, fiber-forward frozen dessert with prebiotic sweetening — gut-health claims in frozen are up 15% with fiber +17%.",
+      "tags": ["functional", "fiber"],
+      "lifecycle": "emerging",
+      "signals": {"social": 64, "momentum": 76, "feasibility": 70},
+      "sources": [
+        {"type": "report", "name": "Tastewise frozen 2026", "note": "gut health +15%, fiber +17%, blood-sugar claims +28% in frozen"},
+        {"type": "report", "name": "WholeFoods Mag functional 2026", "note": "gut health a top-4 functional driver"},
+        {"type": "brand", "name": "Kefir-based frozen entrants", "note": "cultured frozen SKUs multiplying"}
+      ],
+      "suggested_brief": "Low-sugar frozen dessert with cultured dairy character and added fiber, diabetic-friendly sweetening",
+      "module_fits": ["diabetic"]
+    },
+    {
+      "id": "matcha_hojicha",
+      "title": "Matcha / Hojicha Duo",
+      "concept": "Ceremonial matcha and roasted hojicha as a two-tone pint — tea flavors hold premium placement as matcha supply headlines drive interest.",
+      "tags": ["tea", "premium"],
+      "lifecycle": "mass",
+      "signals": {"social": 66, "momentum": 48, "feasibility": 60},
+      "sources": [
+        {"type": "artisan", "name": "Japanese-style shops", "note": "durable premium anchor flavors"},
+        {"type": "tiktok", "name": "matcha shortage discourse", "note": "scarcity narrative sustaining volume"},
+        {"type": "brand", "name": "Häagen-Dazs green tea lineage", "note": "long-standing mass validation"}
+      ],
+      "suggested_brief": "Premium green-tea style ice cream with roasted-tea depth, moderate sweetness",
+      "module_fits": []
+    },
+    {
+      "id": "black_sesame",
+      "title": "Black Sesame & Honey",
+      "concept": "Toasted black sesame's savory depth with a honey finish — the artisan-menu staple that keeps inching mainstream.",
+      "tags": ["nutty", "savory-sweet"],
+      "lifecycle": "artisan",
+      "signals": {"social": 58, "momentum": 52, "feasibility": 65},
+      "sources": [
+        {"type": "artisan", "name": "City scoop-shop menus", "note": "top-selling 'adventurous' SKU"},
+        {"type": "reddit", "name": "r/icecream", "note": "perennial favorite-flavor thread presence"}
+      ],
+      "suggested_brief": "Premium black sesame ice cream with tahini-adjacent nutty depth and honey finish",
+      "module_fits": []
+    },
+    {
+      "id": "brown_butter_miso",
+      "title": "Brown-Butter Miso Caramel",
+      "concept": "Salted caramel's successor: brown butter plus miso umami — chef-driven profile moving from restaurant desserts to pints.",
+      "tags": ["umami", "caramel"],
+      "lifecycle": "artisan",
+      "signals": {"social": 55, "momentum": 60, "feasibility": 80},
+      "sources": [
+        {"type": "artisan", "name": "Chef-collab pints", "note": "miso caramel recurring in restaurant-to-retail drops"},
+        {"type": "report", "name": "Umami-sweet trend coverage", "note": "miso named a dessert crossover ingredient"}
+      ],
+      "suggested_brief": "Premium brown-butter caramel ice cream with a subtle savory umami note and salt balance",
+      "module_fits": []
+    },
+    {
+      "id": "renal_safe_indulgence",
+      "title": "Renal-Safe Indulgent Line",
+      "concept": "Institutional whitespace: genuinely indulgent frozen desserts inside renal limits — dialysis foodservice has demand and almost no premium supply.",
+      "tags": ["medical", "institutional", "whitespace"],
+      "lifecycle": "emerging",
+      "signals": {"social": 30, "momentum": 66, "feasibility": 95},
+      "sources": [
+        {"type": "report", "name": "Food Institute healthy-frozen 2026", "note": "medical-nutrition frozen called an underserved segment"},
+        {"type": "reddit", "name": "r/dialysis", "note": "recurring 'what dessert can I actually eat' threads"}
+      ],
+      "suggested_brief": "Renal-safe scoopable vanilla ice cream, potassium ≤ 200 mg per serving, indulgent texture",
+      "module_fits": ["renal"]
+    },
+    {
+      "id": "freeze_dried_candy_texture",
+      "title": "Freeze-Dried Candy Crunch",
+      "concept": "Freeze-dried fruit and candy shards as shatter-crunch inclusions — texture-first Gen-Z format born on TikTok.",
+      "tags": ["texture", "viral", "gen-z"],
+      "lifecycle": "emerging",
+      "signals": {"social": 74, "momentum": 62, "feasibility": 55},
+      "sources": [
+        {"type": "tiktok", "name": "freeze-dried candy format", "note": "sustained ASMR-crunch content engine"},
+        {"type": "brand", "name": "Novelty bar entrants", "note": "freeze-dried inclusions appearing in bars"}
+      ],
+      "suggested_brief": "Standard vanilla frozen dessert with freeze-dried strawberry shatter-crunch inclusions",
+      "module_fits": []
+    },
+    {
+      "id": "olive_oil_flake_salt",
+      "title": "Olive Oil & Flake Salt",
+      "concept": "EVOO-finished fior di latte — the quiet-luxury artisan flavor with strong food-media halo.",
+      "tags": ["premium", "minimalist"],
+      "lifecycle": "artisan",
+      "signals": {"social": 48, "momentum": 45, "feasibility": 85},
+      "sources": [
+        {"type": "artisan", "name": "Gelato counters / Via Carota effect", "note": "olive-oil soft serve as a status dessert"},
+        {"type": "reddit", "name": "r/icecream", "note": "home-batch olive oil threads"}
+      ],
+      "suggested_brief": "Premium fior di latte ice cream finished with olive oil richness and a flake-salt note",
+      "module_fits": []
+    },
+    {
+      "id": "cereal_milk_newstalgia",
+      "title": "Cereal-Milk Remix",
+      "concept": "Toasted-cereal steeped dairy — Momofuku-era nostalgia re-cycling for Gen Z as 'newstalgia' with new cereal skins.",
+      "tags": ["nostalgia", "gen-z"],
+      "lifecycle": "mass",
+      "signals": {"social": 60, "momentum": 40, "feasibility": 80},
+      "sources": [
+        {"type": "brand", "name": "Cereal-brand collabs", "note": "licensed cereal pints recurring"},
+        {"type": "tiktok", "name": "cereal-milk soft serve", "note": "steady nostalgic engagement"}
+      ],
+      "suggested_brief": "Standard cereal-milk style ice cream with toasted grain sweetness and a malty finish",
+      "module_fits": []
+    },
+    {
+      "id": "yuzu_citrus",
+      "title": "Yuzu Cream",
+      "concept": "Yuzu's floral acidity in a cream base — the citrus trading up from cocktail lists to freezer cases.",
+      "tags": ["citrus", "premium"],
+      "lifecycle": "artisan",
+      "signals": {"social": 52, "momentum": 56, "feasibility": 55},
+      "sources": [
+        {"type": "report", "name": "IFT Outlook 2026", "note": "cited within tropical-citrus expansion"},
+        {"type": "artisan", "name": "Japanese-style shops", "note": "yuzu sorbet/cream fixtures"}
+      ],
+      "suggested_brief": "Premium yuzu citrus ice cream, bright acidity balanced against a soft cream base",
+      "module_fits": []
+    }
+  ]
+}

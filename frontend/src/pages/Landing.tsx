@@ -94,6 +94,7 @@ export default function Landing() {
           <nav className="flex items-center gap-5 text-[13px] text-slate-600">
             <a href="#moat" className="hidden sm:inline hover:text-slate-900 transition-colors">How it verifies</a>
             <a href="#report" className="hidden sm:inline hover:text-slate-900 transition-colors">The report</a>
+            <a href="/ideas" className="hidden sm:inline hover:text-slate-900 transition-colors">Idea stream</a>
             <a
               href="https://github.com/craft-b/formula-forge"
               target="_blank"

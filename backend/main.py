@@ -273,6 +273,13 @@ def meta():
 
 
 
+@app.get("/api/ideas")
+def api_ideas():
+    """The Idea Stream: trend corpus ranked by the deterministic scoring engine."""
+    from ideas import ranked_ideas
+    return ranked_ideas()
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}

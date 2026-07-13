@@ -259,6 +259,17 @@ export default function App() {
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
+  // Idea Stream deep-link: /app?brief=...&modules=a,b prefills the console so
+  // a trend concept lands ready to generate (never auto-runs — the user sends).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const brief = params.get("brief")
+    const mods = params.get("modules")
+    if (brief) setInput(brief)
+    if (mods) setSelectedModules(new Set(mods.split(",").filter(Boolean)))
+    if (brief || mods) window.history.replaceState(null, "", "/app")
+  }, [])
+
   // Meta powers the module toggles and evidence strip. Retry with backoff:
   // the demo backend cold-starts (~50 s on Render), and a single failed fetch
   // would leave the rail permanently empty.
@@ -554,6 +565,12 @@ export default function App() {
                   Dataset {meta.dataset_version} · {meta.ingredient_count} ingredients
                 </span>
               )}
+              <a
+                href="/ideas"
+                className="hidden sm:inline px-2 py-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              >
+                Idea stream
+              </a>
               {!isEmpty && (
                 <button onClick={handleClear} className="px-2 py-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
                   New session
