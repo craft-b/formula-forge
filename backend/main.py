@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
@@ -22,6 +23,7 @@ from graph import (
     agent,
     detect_iteration,
     detect_modules,
+    formula_llm,
     iterate_formula,
     regenerate_formula,
 )
@@ -280,9 +282,96 @@ def api_ideas():
     return ranked_ideas()
 
 
+# ── Readiness (F19 operability) ───────────────────────────────────────────────
+# Every probe below is local: no network call, no token spend, no writes. A live
+# Groq call here would turn each uptime check into a billing line item and couple
+# our liveness to a third party's availability — an outage at the provider would
+# take this instance out of rotation even though it can still serve /api/meta,
+# /api/ideas, and every cached path. All three dependencies are critical: without
+# any one of them a formulation request cannot be served, so any failure is a 503.
+
+
+def _active_model() -> str:
+    """The model id this process will actually call.
+
+    Mirrors `llm._model_for()` — the source of truth — so a non-Groq deployment
+    does not get told it is running a Groq model.
+    """
+    if settings.llm_provider.lower() == "groq":
+        return settings.groq_model
+    return os.getenv("LLM_MODEL") or "unset"
+
+
+def _probe_llm_client() -> dict:
+    """Is a chat model configured and constructed? No network call.
+
+    `groq_key_fingerprint()` is used ONLY as a presence oracle. Its return value
+    carries the key's exact length plus an 11-character window of the key — safe
+    for a private startup log, never for an unauthenticated response body.
+    """
+    if groq_key_fingerprint() == "MISSING":
+        return {"status": "unavailable", "detail": "API key is not configured."}
+    # graph.py binds formula_llm from the same base client the RAG path uses, so
+    # one check covers both routes.
+    if formula_llm is None or not hasattr(formula_llm, "invoke"):
+        return {"status": "unavailable", "detail": "Chat model failed to initialize."}
+    return {"status": "ok", "detail": "API key configured; chat model initialized."}
+
+
+def _probe_agent_graph() -> dict:
+    """Did the LangGraph agent compile at import time (see lifespan)?"""
+    if agent is None or not hasattr(agent, "astream_events"):
+        return {"status": "unavailable", "detail": "LangGraph agent did not load."}
+    return {"status": "ok", "detail": "Compiled LangGraph agent loaded."}
+
+
+def _probe_ingredient_library() -> dict:
+    """Is the governed library readable? Without it nothing can be verified.
+
+    `get_repository()` is lru_cached, so this loads once and is free thereafter.
+    It is also the check that catches a container built without domain/data/.
+    """
+    try:
+        from domain import get_repository
+        repo = get_repository()
+        count = len(repo.ingredients)
+    except Exception as exc:
+        logger.exception("Ingredient library readiness probe failed")
+        return {"status": "unavailable",
+                "detail": f"Library could not be loaded ({type(exc).__name__})."}
+    if count == 0:
+        return {"status": "unavailable", "detail": "Ingredient library is empty."}
+    return {"status": "ok",
+            "detail": f"dataset {repo.version or 'unversioned'}, {count} ingredients."}
+
+
+def readiness_report() -> tuple[dict, bool]:
+    """(response body, healthy) for the readiness probe."""
+    dependencies = {
+        "llm_client": _probe_llm_client(),
+        "agent_graph": _probe_agent_graph(),
+        "ingredient_library": _probe_ingredient_library(),
+    }
+    healthy = all(d["status"] == "ok" for d in dependencies.values())
+    return {
+        "status": "ok" if healthy else "unavailable",
+        "version": settings.app_version,
+        "model": _active_model(),
+        "dependencies": dependencies,
+    }, healthy
+
+
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    """Readiness: can this instance actually serve a formulation request?
+
+    200 when every critical dependency is ready, 503 otherwise — a probe that
+    always returns 200 tells an uptime monitor nothing. Deliberately not
+    rate-limited: an uptime monitor must not be able to lock itself out, and the
+    endpoint spends nothing.
+    """
+    body, healthy = readiness_report()
+    return JSONResponse(status_code=200 if healthy else 503, content=body)
 
 
 async def _stream_agent(

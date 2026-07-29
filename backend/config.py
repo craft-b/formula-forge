@@ -36,6 +36,11 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(extra="ignore")
 
+    # Service identity — surfaced by the /health readiness probe so a deployed
+    # container can be matched to the build it is running. Override with
+    # APP_VERSION (e.g. a git SHA stamped at image build time).
+    app_version: str = "1.0.0"
+
     # LLM provider / fallback
     llm_provider: str = "groq"
     groq_model: str = "llama-3.3-70b-versatile"

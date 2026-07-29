@@ -176,9 +176,11 @@ class TestFormulaJsonParsing:
 class TestApiEndpoints:
 
     def test_health_returns_ok(self, client):
+        # /health is a readiness probe now, not a literal {"status": "ok"} echo.
+        # Full healthy/degraded coverage lives in tests/test_health.py.
         response = client.get("/health")
         assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
+        assert response.json()["status"] == "ok"
 
     def test_chat_valid_message_returns_200(self, client):
         response = client.post("/api/chat", json={"message": "What is whey protein?"})
