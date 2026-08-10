@@ -26,9 +26,9 @@ export function SectionTitle({
   meta?: ReactNode
 }) {
   return (
-    <h4 className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] mb-2.5 flex items-baseline gap-2 flex-wrap">
+    <h4 className="text-meta font-semibold text-slate-500 uppercase tracking-[0.08em] mb-2.5 flex items-baseline gap-2 flex-wrap">
       <span>{children}</span>
-      {meta && <span className="normal-case tracking-normal font-normal text-slate-400">{meta}</span>}
+      {meta && <span className="normal-case tracking-normal font-normal text-slate-500">{meta}</span>}
     </h4>
   )
 }
@@ -75,13 +75,13 @@ export function StatTile({
       className="bg-white border border-slate-200/80 rounded-xl px-3.5 py-3 transition-colors hover:border-slate-300"
       title={hint}
     >
-      <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5">
+      <div className="text-meta text-slate-500 font-medium flex items-center gap-1.5">
         <span className="truncate">{label}</span>
         {estimated !== undefined && <ProvenanceMark estimated={estimated} />}
       </div>
       <div className="text-lg font-semibold text-slate-900 mt-1 leading-none num font-mono">
         {value}
-        {unit && <span className="text-[11px] font-normal text-slate-400 ml-1">{unit}</span>}
+        {unit && <span className="text-meta font-normal text-slate-500 ml-1">{unit}</span>}
       </div>
     </div>
   )
@@ -113,10 +113,10 @@ export function BulletBand({
   return (
     <div title={`${label} ${value} — target ${bandLo}–${bandHi}`}>
       <div className="flex justify-between items-baseline mb-1.5">
-        <span className="text-[11px] font-medium text-slate-500">{label}</span>
+        <span className="text-meta font-medium text-slate-500">{label}</span>
         <span className="text-xs font-semibold text-slate-800 num">
           {value.toFixed(1)}
-          <span className={`ml-1.5 text-[10px] font-medium ${inBand ? "text-teal-700" : "text-amber-700"}`}>
+          <span className={`ml-1.5 text-micro font-medium ${inBand ? "text-teal-700" : "text-amber-700"}`}>
             {inBand ? "in band" : value < bandLo ? "below band" : "above band"}
           </span>
         </span>
@@ -133,12 +133,12 @@ export function BulletBand({
           style={{ left: `calc(${pct(value)}% - 1px)` }}
         />
       </div>
-      <div className="flex justify-between mt-1 text-[10px] text-slate-400 num">
+      <div className="flex justify-between mt-1 text-micro text-slate-500 num">
         <span>{domainLo}</span>
         <span className="text-slate-500">target {bandLo}–{bandHi}</span>
         <span>{domainHi}</span>
       </div>
-      <p className="text-[10px] text-slate-400 mt-0.5">{caption}</p>
+      <p className="text-micro text-slate-500 mt-0.5">{caption}</p>
     </div>
   )
 }
@@ -169,10 +169,10 @@ export function CompositionBar({ segments }: { segments: Segment[] }) {
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
         {shown.map((s) => (
-          <span key={s.key} className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
+          <span key={s.key} className="inline-flex items-center gap-1.5 text-meta text-slate-600">
             <span className="w-2.5 h-2.5 rounded-[3px]" style={{ backgroundColor: s.color }} />
             {s.label}
-            <span className="text-slate-400 num">{s.value.toFixed(1)}%</span>
+            <span className="text-slate-500 num">{s.value.toFixed(1)}%</span>
           </span>
         ))}
       </div>
@@ -225,12 +225,12 @@ export function LimitRow({
           <div className="flex items-baseline justify-between gap-3">
             <span className={`text-xs font-semibold ${tone.text}`}>{name}</span>
             {hasBar && (
-              <span className="text-[11px] text-slate-600 num shrink-0">
-                {measured} <span className="text-slate-400">/ limit {limit}</span>
+              <span className="text-meta text-slate-700 num shrink-0">
+                {measured} <span className="text-slate-500">/ limit {limit}</span>
               </span>
             )}
           </div>
-          <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">{explanation}</p>
+          <p className="text-meta text-slate-600 mt-0.5 leading-relaxed">{explanation}</p>
           {hasBar && (
             <div className="relative h-1.5 mt-2 rounded-full bg-white/80">
               <div
@@ -252,7 +252,7 @@ export function LimitRow({
 export function StatusPill({ ok, children }: { ok: boolean; children: ReactNode }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${
+      className={`inline-flex items-center gap-1.5 text-meta font-semibold px-2.5 py-1 rounded-full ${
         ok ? "bg-teal-50 text-teal-700 border border-teal-200" : "bg-red-50 text-red-700 border border-red-200"
       }`}
     >

@@ -109,7 +109,7 @@ function ReportActions({ formula }: { formula: ValidatedFormula }) {
   }
 
   const btn =
-    "inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 hover:text-slate-800 px-2 py-1 rounded-md hover:bg-slate-100 transition-colors"
+    "inline-flex items-center gap-1.5 text-meta font-medium text-slate-600 hover:text-slate-800 px-2 py-1 rounded-md hover:bg-slate-100 transition-colors"
 
   return (
     <div className="flex items-center gap-0.5 print-hide" aria-label="Report actions">
@@ -161,21 +161,21 @@ export function FormulaReport({
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-semibold tracking-[0.14em] text-slate-400 uppercase">
+              <span className="text-micro font-semibold tracking-[0.14em] text-slate-500 uppercase">
                 Formula report
               </span>
               {version != null && (
-                <span className="num text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-900 text-white">
+                <span className="num text-micro font-semibold px-1.5 py-0.5 rounded-full bg-slate-900 text-white">
                   v{version}
                 </span>
               )}
-              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 capitalize">
+              <span className="text-micro font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 capitalize">
                 {c.product_format.replace("_", " ")}
               </span>
               {(val.active_modules ?? []).map((m) => (
                 <span
                   key={m}
-                  className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 capitalize"
+                  className="text-micro font-medium px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 capitalize"
                 >
                   {m.replace("_", " ")}
                 </span>
@@ -195,9 +195,9 @@ export function FormulaReport({
               <ReportActions formula={formula} />
               <StatusPill ok={passed}>{passed ? "Compliant" : "Flagged"}</StatusPill>
             </div>
-            <span className="text-[10px] text-slate-400">
-              <span className="text-teal-600">✓</span> rule-verified ·{" "}
-              <span className="text-amber-600">~</span> model-estimated
+            <span className="text-micro text-slate-500">
+              <span className="text-teal-700">✓</span> rule-verified ·{" "}
+              <span className="text-amber-700">~</span> model-estimated
             </span>
           </div>
         </div>
@@ -228,7 +228,7 @@ export function FormulaReport({
               ))}
             </div>
             {val.repaired && (
-              <p className="text-[11px] text-slate-400 mt-2">
+              <p className="text-meta text-slate-500 mt-2">
                 Ingredient percentages were normalized to sum to 100%.
               </p>
             )}
@@ -300,7 +300,7 @@ export function FormulaReport({
                   role="tab"
                   aria-selected={basis === id}
                   onClick={() => setBasis(id)}
-                  className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
+                  className={`px-2.5 py-1 text-meta font-medium rounded-md transition-colors ${
                     basis === id ? "bg-white text-slate-800 shadow-sm border border-slate-200" : "text-slate-500 hover:text-slate-700"
                   }`}
                 >
@@ -324,14 +324,14 @@ export function FormulaReport({
           <button
             onClick={() => setFullPanel((v) => !v)}
             aria-expanded={fullPanel}
-            className="mt-2 text-[11px] font-medium text-slate-400 hover:text-slate-700 transition-colors print-hide"
+            className="mt-2 text-meta font-medium text-slate-600 hover:text-slate-700 transition-colors print-hide"
           >
             {fullPanel ? "− Hide full nutrient panel" : "+ Full nutrient panel"}
           </button>
           {fullPanel && (
             <table className="w-full text-sm mt-1 ff-rise">
               <thead>
-                <tr className="text-[10px] uppercase tracking-[0.08em] text-slate-400">
+                <tr className="text-micro uppercase tracking-[0.08em] text-slate-500">
                   <th className="text-left font-semibold py-1.5">Nutrient</th>
                   <th className="text-right font-semibold py-1.5">Per serving</th>
                   <th className="text-right font-semibold py-1.5">Per 100 g</th>
@@ -340,12 +340,12 @@ export function FormulaReport({
               <tbody>
                 {NUTRIENT_ROWS.map((r) => (
                   <tr key={r.key} className="border-t border-slate-100">
-                    <td className="py-1.5 pr-3 text-[13px] text-slate-600">{r.label}</td>
-                    <td className="py-1.5 text-right text-[13px] text-slate-800 num">
-                      {c.nutrients_per_serving[r.key].toFixed(r.digits)} <span className="text-slate-400">{r.unit}</span>
+                    <td className="py-1.5 pr-3 text-data text-slate-600">{r.label}</td>
+                    <td className="py-1.5 text-right text-data text-slate-800 num">
+                      {c.nutrients_per_serving[r.key].toFixed(r.digits)} <span className="text-slate-500">{r.unit}</span>
                     </td>
-                    <td className="py-1.5 text-right text-[13px] text-slate-800 num">
-                      {c.nutrients_per_100g[r.key].toFixed(r.digits)} <span className="text-slate-400">{r.unit}</span>
+                    <td className="py-1.5 text-right text-data text-slate-800 num">
+                      {c.nutrients_per_100g[r.key].toFixed(r.digits)} <span className="text-slate-500">{r.unit}</span>
                     </td>
                   </tr>
                 ))}
@@ -377,7 +377,7 @@ export function FormulaReport({
                     role="tab"
                     aria-selected={batchKg === kg}
                     onClick={() => setBatchKg(kg)}
-                    className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors num ${
+                    className={`px-2.5 py-1 text-meta font-medium rounded-md transition-colors num ${
                       batchKg === kg ? "bg-white text-slate-800 shadow-sm border border-slate-200" : "text-slate-500 hover:text-slate-700"
                     }`}
                   >
@@ -388,7 +388,7 @@ export function FormulaReport({
               <button
                 onClick={() => downloadBatchCsv(formula, batchKg)}
                 title="Download the batch sheet as CSV"
-                className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 hover:text-slate-800 px-2 py-1 rounded-md hover:bg-slate-100 transition-colors"
+                className="inline-flex items-center gap-1.5 text-meta font-medium text-slate-600 hover:text-slate-800 px-2 py-1 rounded-md hover:bg-slate-100 transition-colors"
               >
                 <Download className="w-3.5 h-3.5" />
                 CSV
@@ -397,7 +397,7 @@ export function FormulaReport({
           </div>
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-[10px] uppercase tracking-[0.08em] text-slate-400">
+              <tr className="text-micro uppercase tracking-[0.08em] text-slate-500">
                 <th className="text-left font-semibold pb-1.5">Ingredient</th>
                 <th className="text-right font-semibold pb-1.5 w-16">% w/w</th>
                 <th className="text-right font-semibold pb-1.5 w-24">
@@ -420,13 +420,13 @@ export function FormulaReport({
                   <td className="py-2 pl-3 hidden sm:table-cell align-middle">
                     <InlineBar value={ing.percentage} max={maxIngredient} />
                   </td>
-                  <td className="py-2 pl-3 text-[11px] text-slate-400 leading-snug hidden sm:table-cell">
+                  <td className="py-2 pl-3 text-meta text-slate-500 leading-snug hidden sm:table-cell">
                     {ing.notes}
                   </td>
                 </tr>
               ))}
               <tr className="border-t-2 border-slate-200">
-                <td className="py-2 pr-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Total</td>
+                <td className="py-2 pr-3 text-meta font-semibold uppercase tracking-[0.08em] text-slate-500">Total</td>
                 <td className="py-2 text-right font-semibold text-slate-900 num">{totalPct.toFixed(2)}%</td>
                 <td className="py-2 text-right font-semibold text-slate-900 num">{(batchKg * 1000).toLocaleString()}</td>
                 <td className="hidden sm:table-cell" />
@@ -445,7 +445,7 @@ export function FormulaReport({
         {formula.formulation_notes && (
           <section className="rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 ff-rise ff-rise-4">
             <SectionTitle>Formulation notes</SectionTitle>
-            <div className="text-[13px] text-slate-600 leading-relaxed -mt-1">
+            <div className="text-data text-slate-600 leading-relaxed -mt-1">
               <Markdown text={formula.formulation_notes} />
             </div>
           </section>
@@ -461,7 +461,7 @@ export function RejectionReport({ rejection }: { rejection: RejectedFormula }) {
       <div className="px-6 py-4 bg-red-50/70 border-b border-red-100">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <span className="text-[10px] font-semibold tracking-[0.14em] text-red-400 uppercase">
+            <span className="text-micro font-semibold tracking-[0.14em] text-red-600 uppercase">
               Verification failed
             </span>
             <h3 className="font-heading text-base font-semibold text-red-900 mt-0.5">{rejection.product_name}</h3>

@@ -104,12 +104,12 @@ export function ProcessMethod({ composition }: { composition: ComputedCompositio
             {i < steps.length - 1 && (
               <span className="absolute left-[11px] top-6 bottom-0 w-px bg-slate-200" aria-hidden />
             )}
-            <span className="w-[23px] h-[23px] shrink-0 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-semibold text-slate-600 flex items-center justify-center num relative">
+            <span className="w-[23px] h-[23px] shrink-0 rounded-full bg-slate-100 border border-slate-200 text-micro font-semibold text-slate-600 flex items-center justify-center num relative">
               {i + 1}
             </span>
             <div className="min-w-0 pt-0.5">
-              <span className="text-[13px] font-semibold text-slate-800">{s.title}</span>
-              <span className="text-[13px] text-slate-500"> — {s.detail}</span>
+              <span className="text-data font-semibold text-slate-800">{s.title}</span>
+              <span className="text-data text-slate-600"> — {s.detail}</span>
             </div>
           </li>
         ))}

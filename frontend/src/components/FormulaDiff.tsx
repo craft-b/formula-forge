@@ -88,7 +88,7 @@ function PctPill({ oldV, newV }: { oldV: number; newV: number }) {
   if (!isFinite(pct) || Math.abs(pct) < 0.5) return null
   const up = pct > 0
   return (
-    <span className="num text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600">
+    <span className="num text-micro font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600">
       {up ? "↑" : "↓"} {Math.abs(pct).toFixed(0)}%
     </span>
   )
@@ -119,7 +119,7 @@ export function FormulaDiff({
       </SectionTitle>
 
       {ingredientChanges.length === 0 && metricDeltas.length === 0 ? (
-        <p className="text-[13px] text-slate-500">
+        <p className="text-data text-slate-600">
           No material changes — composition and nutrition are within display thresholds of v{fromVersion}.
         </p>
       ) : (
@@ -127,9 +127,9 @@ export function FormulaDiff({
           {ingredientChanges.length > 0 && (
             <ul className="space-y-1">
               {ingredientChanges.map((c) => (
-                <li key={`${c.kind}-${c.name}`} className="flex items-center gap-2.5 text-[13px]">
+                <li key={`${c.kind}-${c.name}`} className="flex items-center gap-2.5 text-data">
                   <span
-                    className={`w-[18px] h-[18px] shrink-0 rounded-md border text-[11px] font-bold flex items-center justify-center ${KIND_STYLE[c.kind].cls}`}
+                    className={`w-[18px] h-[18px] shrink-0 rounded-md border text-meta font-bold flex items-center justify-center ${KIND_STYLE[c.kind].cls}`}
                     aria-label={c.kind}
                   >
                     {KIND_STYLE[c.kind].sym}
@@ -137,12 +137,12 @@ export function FormulaDiff({
                   <span className={`text-slate-800 ${c.kind === "removed" ? "line-through text-slate-400" : ""}`}>
                     {c.name}
                   </span>
-                  <span className="num text-slate-500 ml-auto shrink-0">
+                  <span className="num text-slate-600 ml-auto shrink-0">
                     {c.kind === "added" && <>{c.newPct!.toFixed(1)}%</>}
                     {c.kind === "removed" && <>was {c.oldPct!.toFixed(1)}%</>}
                     {c.kind === "adjusted" && (
                       <>
-                        {c.oldPct!.toFixed(1)}% <span className="text-slate-400">→</span> {c.newPct!.toFixed(1)}%
+                        {c.oldPct!.toFixed(1)}% <span className="text-slate-500">→</span> {c.newPct!.toFixed(1)}%
                       </>
                     )}
                   </span>
@@ -154,12 +154,12 @@ export function FormulaDiff({
           {metricDeltas.length > 0 && (
             <div className="flex flex-wrap gap-x-5 gap-y-1.5 pt-2 border-t border-slate-200/70">
               {metricDeltas.map((d) => (
-                <span key={d.label} className="inline-flex items-baseline gap-1.5 text-[12px]">
-                  <span className="text-slate-500">{d.label}</span>
+                <span key={d.label} className="inline-flex items-baseline gap-1.5 text-meta">
+                  <span className="text-slate-600">{d.label}</span>
                   <span className="num text-slate-700">
-                    {d.fmt(d.oldV)} <span className="text-slate-400">→</span>{" "}
+                    {d.fmt(d.oldV)} <span className="text-slate-500">→</span>{" "}
                     <span className="font-semibold text-slate-900">{d.fmt(d.newV)}</span>
-                    {d.unit && <span className="text-slate-400 ml-0.5">{d.unit}</span>}
+                    {d.unit && <span className="text-slate-500 ml-0.5">{d.unit}</span>}
                   </span>
                   <PctPill oldV={d.oldV} newV={d.newV} />
                 </span>

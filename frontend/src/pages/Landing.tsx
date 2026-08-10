@@ -66,7 +66,7 @@ function LaunchButton({ children, ghost }: { children: React.ReactNode; ghost?: 
       className={
         ghost
           ? "inline-flex items-center gap-2 rounded-xl border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700 hover:border-slate-500 hover:text-slate-900 transition-colors"
-          : "inline-flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-3 text-sm font-semibold text-white hover:bg-teal-500 transition-colors shadow-[0_1px_0_rgba(255,255,255,0.2)_inset,0_8px_24px_rgba(13,148,136,0.25)]"
+          : "inline-flex items-center gap-2 rounded-xl bg-teal-700 px-5 py-3 text-sm font-semibold text-white hover:bg-teal-600 transition-colors shadow-[0_1px_0_rgba(255,255,255,0.2)_inset,0_8px_24px_rgba(13,148,136,0.25)]"
       }
     >
       {children}
@@ -89,9 +89,9 @@ export default function Landing() {
             <span className="w-7 h-7 rounded-lg bg-teal-600 flex items-center justify-center">
               <FlaskConical className="w-3.5 h-3.5 text-white" aria-hidden />
             </span>
-            <span className="font-semibold tracking-tight text-[15px]">FormulaForge</span>
+            <span className="font-semibold tracking-tight text-base">FormulaForge</span>
           </a>
-          <nav className="flex items-center gap-5 text-[13px] text-slate-600">
+          <nav className="flex items-center gap-5 text-data text-slate-600">
             <a href="#moat" className="hidden sm:inline hover:text-slate-900 transition-colors">How it verifies</a>
             <a href="#report" className="hidden sm:inline hover:text-slate-900 transition-colors">The report</a>
             <a href="/ideas" className="hidden sm:inline hover:text-slate-900 transition-colors">Idea stream</a>
@@ -115,7 +115,7 @@ export default function Landing() {
 
       {/* ── Hero ── */}
       <section className="max-w-6xl mx-auto px-5 sm:px-8 pt-16 sm:pt-24 pb-14">
-        <p className="text-[11px] font-semibold tracking-[0.18em] text-teal-700 uppercase ff-rise">
+        <p className="text-meta font-semibold tracking-[0.18em] text-teal-700 uppercase ff-rise">
           Formulation intelligence for regulated frozen desserts
         </p>
         <h1 className="font-heading text-[2.6rem] sm:text-[4rem] leading-[1.05] tracking-[-0.02em] font-semibold mt-4 max-w-4xl ff-rise ff-rise-1">
@@ -138,7 +138,7 @@ export default function Landing() {
             See a verified report
           </a>
         </div>
-        <div className="flex flex-wrap gap-x-7 gap-y-2 mt-10 text-[13px] text-slate-500 ff-rise ff-rise-4">
+        <div className="flex flex-wrap gap-x-7 gap-y-2 mt-10 text-data text-slate-600 ff-rise ff-rise-4">
           <span><span className="num font-semibold text-slate-900">34</span> governed ingredients</span>
           <span><span className="num font-semibold text-slate-900">12+</span> checks per formula</span>
           <span><span className="num font-semibold text-slate-900">6</span> constraint modules</span>
@@ -149,10 +149,10 @@ export default function Landing() {
       {/* ── Credibility strip ── */}
       <section className="border-y border-slate-900/5 bg-white/60">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span className="text-[11px] font-semibold tracking-[0.14em] text-slate-400 uppercase">
+          <span className="text-meta font-semibold tracking-[0.14em] text-slate-500 uppercase">
             Built from 26 years of CPG R&D
           </span>
-          <span className="text-[13px] text-slate-600">
+          <span className="text-data text-slate-600">
             Post Cereals · Magnum Ice Cream (Unilever) · Talenti · Breyers
           </span>
         </div>
@@ -161,13 +161,13 @@ export default function Landing() {
       {/* ── The moat (dark statement band) ── */}
       <section id="moat" className="bg-slate-950 bg-rail-glow text-slate-300 scroll-mt-14">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-16 sm:py-20">
-          <p className="text-[11px] font-semibold tracking-[0.18em] text-teal-400 uppercase">
+          <p className="text-meta font-semibold tracking-[0.18em] text-teal-400 uppercase">
             Why it can be trusted
           </p>
           <h2 className="font-heading text-3xl sm:text-[2.5rem] leading-tight tracking-[-0.015em] font-semibold text-white mt-3 max-w-2xl">
             A generative system with a deterministic gate.
           </h2>
-          <p className="text-[15px] text-slate-400 leading-relaxed max-w-2xl mt-4">
+          <p className="text-base text-slate-400 leading-relaxed max-w-2xl mt-4">
             The model only proposes an ingredient structure, drawn from a governed library.
             Nutrition, freezing-point depression, sweetness, and compliance are computed by a
             pure food-science engine — and a formula that fails physics or a dietary ruleset
@@ -181,16 +181,16 @@ export default function Landing() {
                   <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span className={`w-1.5 h-1.5 rounded-full ${step.model ? "bg-amber-400" : "bg-teal-400"}`} />
-                      <span className="text-[13px] font-semibold text-white">{step.label}</span>
+                      <span className="text-data font-semibold text-white">{step.label}</span>
                     </div>
-                    <div className="text-[11px] text-slate-500 mt-1">{step.detail}</div>
+                    <div className="text-meta text-slate-400 mt-1">{step.detail}</div>
                   </div>
-                  {i < PIPELINE.length - 1 && <span className="text-slate-600" aria-hidden>→</span>}
+                  {i < PIPELINE.length - 1 && <span className="text-slate-400" aria-hidden>→</span>}
                 </div>
               ))}
             </div>
             <div className="flex min-w-max mt-3">
-              <span className="text-[11px] text-slate-500">
+              <span className="text-meta text-slate-400">
                 <span className="text-amber-400">●</span> model &nbsp;
                 <span className="text-teal-400">●</span> deterministic — the gate between them is the product
               </span>
@@ -204,7 +204,7 @@ export default function Landing() {
         <h2 className="font-heading text-3xl sm:text-[2.2rem] tracking-[-0.015em] font-semibold max-w-2xl">
           Weeks of dietary scoping, answered in minutes.
         </h2>
-        <p className="text-[15px] text-slate-600 leading-relaxed max-w-2xl mt-3">
+        <p className="text-base text-slate-600 leading-relaxed max-w-2xl mt-3">
           Early-stage scoping of constrained frozen desserts wastes weeks on questions a trained
           formulator can answer fast — if the arithmetic is done for them, correctly, every time.
         </p>
@@ -215,10 +215,10 @@ export default function Landing() {
                 <span className="w-8 h-8 rounded-lg bg-teal-50 border border-teal-100 flex items-center justify-center">
                   <u.icon className="w-4 h-4 text-teal-700" aria-hidden />
                 </span>
-                <h3 className="text-[15px] font-semibold text-slate-900">{u.title}</h3>
+                <h3 className="text-base font-semibold text-slate-900">{u.title}</h3>
               </div>
-              <p className="num text-[11px] text-teal-700 font-medium mt-3">{u.constraint}</p>
-              <p className="text-[13px] text-slate-500 leading-relaxed mt-1.5">{u.body}</p>
+              <p className="num text-meta text-teal-700 font-medium mt-3">{u.constraint}</p>
+              <p className="text-data text-slate-600 leading-relaxed mt-1.5">{u.body}</p>
             </div>
           ))}
         </div>
@@ -227,7 +227,7 @@ export default function Landing() {
       {/* ── The report (live component) ── */}
       <section id="report" className="border-t border-slate-900/5 bg-white/60 scroll-mt-14 overflow-x-clip">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-16 sm:py-20">
-          <p className="text-[11px] font-semibold tracking-[0.18em] text-teal-700 uppercase">
+          <p className="text-meta font-semibold tracking-[0.18em] text-teal-700 uppercase">
             The deliverable
           </p>
           <h2 className="font-heading text-3xl sm:text-[2.2rem] tracking-[-0.015em] font-semibold mt-3 max-w-2xl">
@@ -236,8 +236,8 @@ export default function Landing() {
           <div className="grid sm:grid-cols-4 gap-x-6 gap-y-4 mt-8">
             {REPORT_FEATURES.map((f) => (
               <div key={f.title}>
-                <h3 className="text-[13px] font-semibold text-slate-900">{f.title}</h3>
-                <p className="text-[12px] text-slate-500 leading-relaxed mt-1">{f.body}</p>
+                <h3 className="text-data font-semibold text-slate-900">{f.title}</h3>
+                <p className="text-meta text-slate-600 leading-relaxed mt-1">{f.body}</p>
               </div>
             ))}
           </div>
@@ -246,7 +246,7 @@ export default function Landing() {
             <div className="absolute -inset-x-6 -top-6 bottom-1/2 bg-blueprint rounded-3xl" aria-hidden />
             <div className="relative max-w-4xl mx-auto">
               <FormulaReport formula={SAMPLE_FORMULA} />
-              <p className="text-center text-[11px] text-slate-400 mt-3">
+              <p className="text-center text-meta text-slate-500 mt-3">
                 Live component with representative data — the batch-size toggle and nutrition
                 basis switch work right here. In the workspace, every number comes from the engine.
               </p>
@@ -261,7 +261,7 @@ export default function Landing() {
         <h2 className="font-heading text-3xl sm:text-[2.6rem] tracking-[-0.015em] font-semibold mt-4">
           Describe the constraint. <span className="italic text-teal-700">Get the formula.</span>
         </h2>
-        <p className="text-[15px] text-slate-600 mt-3 max-w-xl mx-auto">
+        <p className="text-base text-slate-600 mt-3 max-w-xl mx-auto">
           “Renal-safe scoopable vanilla, potassium ≤ 200 mg per serving” is a complete brief.
         </p>
         <div className="mt-7 flex justify-center">
@@ -272,7 +272,7 @@ export default function Landing() {
       {/* ── Footer ── */}
       <footer className="border-t border-slate-900/5">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-8 flex flex-wrap items-start justify-between gap-4">
-          <div className="text-[12px] text-slate-500">
+          <div className="text-meta text-slate-600">
             <div className="flex items-center gap-2 text-slate-700 font-semibold">
               <span className="w-5 h-5 rounded-md bg-teal-600 flex items-center justify-center">
                 <FlaskConical className="w-3 h-3 text-white" aria-hidden />
@@ -285,7 +285,7 @@ export default function Landing() {
               guidance and require professional review.
             </p>
           </div>
-          <div className="flex gap-5 text-[12px] text-slate-500">
+          <div className="flex gap-5 text-meta text-slate-600">
             <a href="/app" className="hover:text-slate-900 transition-colors">Workspace</a>
             <a href="https://github.com/craft-b/formula-forge" target="_blank" rel="noreferrer" className="hover:text-slate-900 transition-colors">GitHub</a>
           </div>

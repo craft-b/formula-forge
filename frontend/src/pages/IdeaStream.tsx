@@ -64,7 +64,7 @@ function ScoreBreakdown({ breakdown }: { breakdown: Record<string, number> }) {
     <div className="space-y-1">
       {BREAKDOWN_ORDER.map((k) => (
         <div key={k} className="flex items-center gap-2">
-          <span className="w-[4.5rem] text-[9px] uppercase tracking-[0.08em] text-slate-400 text-right shrink-0">
+          <span className="w-[4.5rem] text-micro uppercase tracking-[0.08em] text-slate-500 text-right shrink-0">
             {k}
           </span>
           <div className="w-24 h-1.5 rounded-full bg-slate-100">
@@ -73,7 +73,7 @@ function ScoreBreakdown({ breakdown }: { breakdown: Record<string, number> }) {
               style={{ width: `${breakdown[k]}%` }}
             />
           </div>
-          <span className="num text-[10px] text-slate-500 w-6">{Math.round(breakdown[k])}</span>
+          <span className="num text-micro text-slate-600 w-6">{Math.round(breakdown[k])}</span>
         </div>
       ))}
     </div>
@@ -95,21 +95,21 @@ function IdeaCard({ idea }: { idea: Idea }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="min-w-0">
-              <h3 className="text-[15px] font-semibold text-slate-900">{idea.title}</h3>
-              <p className="text-[13px] text-slate-500 leading-relaxed mt-1 max-w-xl">{idea.concept}</p>
+              <h3 className="text-base font-semibold text-slate-900">{idea.title}</h3>
+              <p className="text-data text-slate-600 leading-relaxed mt-1 max-w-xl">{idea.concept}</p>
             </div>
             {/* Score */}
             <div className="shrink-0 text-right">
               <div className="flex items-baseline gap-1 justify-end">
                 <span className="num text-2xl font-semibold text-slate-900">{idea.score.toFixed(1)}</span>
-                <span className="text-[10px] text-slate-400">/100</span>
+                <span className="text-micro text-slate-500">/100</span>
               </div>
-              <span className="text-[9px] uppercase tracking-[0.1em] text-slate-400">trend score</span>
+              <span className="text-micro uppercase tracking-[0.1em] text-slate-500">trend score</span>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 mt-3">
-            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-900 text-white">
+            <span className="inline-flex items-center gap-1 text-micro font-medium px-2 py-0.5 rounded-full bg-slate-900 text-white">
               <TrendingUp className="w-2.5 h-2.5" aria-hidden />
               {LIFECYCLE_LABEL[idea.lifecycle] ?? idea.lifecycle}
             </span>
@@ -117,7 +117,7 @@ function IdeaCard({ idea }: { idea: Idea }) {
               <span
                 key={s.name}
                 title={s.note}
-                className={`text-[10px] font-medium px-2 py-0.5 rounded-full border cursor-help ${SOURCE_STYLE[s.type]}`}
+                className={`text-micro font-medium px-2 py-0.5 rounded-full border cursor-help ${SOURCE_STYLE[s.type]}`}
               >
                 {s.name}
               </span>
@@ -128,7 +128,7 @@ function IdeaCard({ idea }: { idea: Idea }) {
             <ScoreBreakdown breakdown={idea.breakdown} />
             <a
               href={formulateHref(idea)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold px-3.5 py-2 hover:bg-teal-500 transition-colors shrink-0"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 text-white text-xs font-semibold px-3.5 py-2 hover:bg-teal-600 transition-colors shrink-0"
             >
               Formulate this
               <ArrowRight className="w-3.5 h-3.5" aria-hidden />
@@ -160,9 +160,9 @@ export default function IdeaStream() {
             <span className="w-7 h-7 rounded-lg bg-teal-600 flex items-center justify-center">
               <FlaskConical className="w-3.5 h-3.5 text-white" aria-hidden />
             </span>
-            <span className="font-semibold tracking-tight text-[15px]">FormulaForge</span>
+            <span className="font-semibold tracking-tight text-base">FormulaForge</span>
           </a>
-          <nav className="flex items-center gap-5 text-[13px] text-slate-600">
+          <nav className="flex items-center gap-5 text-data text-slate-600">
             <a href="/" className="hidden sm:inline hover:text-slate-900 transition-colors">About</a>
             <a
               href="/app"
@@ -175,19 +175,19 @@ export default function IdeaStream() {
       </header>
 
       <main className="max-w-4xl mx-auto px-5 sm:px-8 py-12 sm:py-16">
-        <p className="text-[11px] font-semibold tracking-[0.18em] text-teal-700 uppercase ff-rise">
+        <p className="text-meta font-semibold tracking-[0.18em] text-teal-700 uppercase ff-rise">
           Consumer-trend intelligence
         </p>
         <h1 className="font-heading text-4xl sm:text-[3rem] leading-[1.08] tracking-[-0.015em] font-semibold mt-3 ff-rise ff-rise-1">
           The Idea Stream
         </h1>
-        <p className="text-[15px] text-slate-600 leading-relaxed max-w-2xl mt-4 ff-rise ff-rise-2">
+        <p className="text-base text-slate-600 leading-relaxed max-w-2xl mt-4 ff-rise ff-rise-2">
           Flavor and product concepts surfaced from social listening, artisan menus, brand
           launches, and trend reports — ranked by a deterministic scoring engine, highest
           probability first. Every idea drops straight into the workspace as a formulation brief.
         </p>
         {data && (
-          <p className="text-[11px] text-slate-400 mt-3 ff-rise ff-rise-3">
+          <p className="text-meta text-slate-500 mt-3 ff-rise ff-rise-3">
             Corpus <span className="num">{data.dataset_version}</span> · updated{" "}
             <span className="num">{data.updated}</span> · {data.ideas.length} concepts · score =
             25% social + 25% momentum + 15% source breadth + 20% adoption stage + 15% formulation
@@ -202,7 +202,7 @@ export default function IdeaStream() {
             </div>
           )}
           {!data && !error && (
-            <div className="rounded-2xl border border-slate-200 bg-white px-6 py-5 text-sm text-slate-400">
+            <div className="rounded-2xl border border-slate-200 bg-white px-6 py-5 text-sm text-slate-500">
               Loading ranked ideas…
             </div>
           )}
@@ -210,7 +210,7 @@ export default function IdeaStream() {
         </div>
 
         {data && (
-          <p className="text-[11px] text-slate-400 leading-relaxed max-w-2xl mt-8">
+          <p className="text-meta text-slate-500 leading-relaxed max-w-2xl mt-8">
             {data.methodology}
           </p>
         )}

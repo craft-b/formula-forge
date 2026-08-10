@@ -41,7 +41,7 @@ export function BriefPanel({
     <div className="space-y-6">
       {/* Product format */}
       <section>
-        <h3 className="text-[10px] font-semibold tracking-[0.14em] text-slate-500 uppercase mb-2">
+        <h3 className="text-micro font-semibold tracking-[0.14em] text-slate-400 uppercase mb-2">
           Product format
         </h3>
         <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Product format">
@@ -52,7 +52,7 @@ export function BriefPanel({
               aria-checked={format === f.id}
               disabled={disabled}
               onClick={() => onFormat(f.id)}
-              className={`text-[11px] px-2.5 py-1.5 rounded-lg border transition-all disabled:opacity-50 ${
+              className={`text-meta px-2.5 py-1.5 rounded-lg border transition-all disabled:opacity-50 ${
                 format === f.id
                   ? "bg-teal-500/15 border-teal-500/50 text-teal-300 font-medium"
                   : "bg-white/[0.03] border-white/10 text-slate-400 hover:border-white/25 hover:text-slate-200"
@@ -66,7 +66,7 @@ export function BriefPanel({
 
       {/* Constraint modules */}
       <section>
-        <h3 className="text-[10px] font-semibold tracking-[0.14em] text-slate-500 uppercase mb-2">
+        <h3 className="text-micro font-semibold tracking-[0.14em] text-slate-400 uppercase mb-2">
           Dietary constraints
         </h3>
         <div className="space-y-1">
@@ -100,9 +100,11 @@ export function BriefPanel({
                 <span className="min-w-0">
                   <span className={`block text-xs font-medium capitalize ${on ? "text-teal-200" : "text-slate-300"}`}>
                     {m.id.replace("_", " ")}
-                    {m.stub && <span className="ml-1.5 text-[9px] text-slate-500 uppercase">preview</span>}
+                    {m.stub && <span className="ml-1.5 text-micro text-slate-400 uppercase">preview</span>}
                   </span>
-                  <span className="block text-[10px] text-slate-500 truncate">
+                  {/* The threshold is the most load-bearing text in the panel —
+                      wrap it rather than truncating it out of sight. */}
+                  <span className="block text-micro text-slate-400 leading-snug">
                     {MODULE_HINTS[m.id] ?? m.label}
                   </span>
                 </span>
@@ -117,7 +119,7 @@ export function BriefPanel({
             </div>
           )}
         </div>
-        <p className="text-[10px] text-slate-600 mt-2 leading-relaxed">
+        <p className="text-micro text-slate-400 mt-2 leading-relaxed">
           Thresholds are configurable defaults from published guidance — professional review required.
         </p>
       </section>
