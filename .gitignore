@@ -38,5 +38,6 @@ venv/
 
 # Local Claude settings (per-machine)
 .claude/settings.local.json
+.claude/launch.json
 .vercel
 .env*
