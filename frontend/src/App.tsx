@@ -260,6 +260,7 @@ export default function App() {
   const [panelOpen, setPanelOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const sheetRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -267,19 +268,63 @@ export default function App() {
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
-  // Escape closes the constraint sheet, and the body stays locked while it is
-  // open so the feed behind it doesn't scroll under the user's finger.
+  // The sheet is a real modal, not just one that says so: Escape closes it, the
+  // body stays locked so the feed doesn't scroll under the user's finger, focus
+  // moves into it on open, Tab cycles inside it, and focus returns to whatever
+  // opened it on close. aria-modal only declares that contract — these handlers
+  // are what honor it for keyboard and screen-reader users.
   useEffect(() => {
     if (!panelOpen) return
+    const restoreTo = document.activeElement as HTMLElement | null
+    const SELECTOR =
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    // getClientRects() rather than offsetParent: the sheet sits inside a fixed
+    // ancestor, where offsetParent is null even for perfectly visible controls.
+    const focusable = () =>
+      Array.from(sheetRef.current?.querySelectorAll<HTMLElement>(SELECTOR) ?? []).filter(
+        (el) => el.getClientRects().length > 0
+      )
+
+    // Focus the container, not the first control: it carries the dialog's
+    // accessible name, so screen readers announce what just opened.
+    sheetRef.current?.focus()
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPanelOpen(false)
+      if (e.key === "Escape") {
+        setPanelOpen(false)
+        return
+      }
+      if (e.key !== "Tab") return
+      const items = focusable()
+      if (items.length === 0) {
+        e.preventDefault()
+        return
+      }
+      const first = items[0]
+      const last = items[items.length - 1]
+      const active = document.activeElement
+      if (!sheetRef.current?.contains(active)) {
+        // Focus escaped the sheet entirely — pull it back. (The container
+        // itself passes `contains`, so it falls through to the cases below.)
+        e.preventDefault()
+        ;(e.shiftKey ? last : first).focus()
+      } else if (e.shiftKey && (active === first || active === sheetRef.current)) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
+
     window.addEventListener("keydown", onKey)
     const prev = document.body.style.overflow
     document.body.style.overflow = "hidden"
     return () => {
       window.removeEventListener("keydown", onKey)
       document.body.style.overflow = prev
+      // Only restore if the trigger is still in the document.
+      if (restoreTo?.isConnected) restoreTo.focus()
     }
   }, [panelOpen])
 
@@ -754,10 +799,12 @@ export default function App() {
           />
           <div
             id="constraint-sheet"
+            ref={sheetRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-label="Product format and dietary constraints"
-            className="absolute inset-y-0 left-0 w-[min(22rem,88vw)] flex flex-col bg-slate-950 text-slate-200 bg-rail-glow shadow-2xl ff-rise"
+            className="absolute inset-y-0 left-0 w-[min(22rem,88vw)] flex flex-col bg-slate-950 text-slate-200 bg-rail-glow shadow-2xl ff-rise focus:outline-none"
           >
             <div className="flex items-center justify-between px-5 h-12 border-b border-white/10 shrink-0">
               <span className="text-micro font-semibold tracking-[0.14em] text-slate-400 uppercase">
