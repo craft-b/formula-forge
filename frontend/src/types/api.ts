@@ -68,6 +68,8 @@ export interface ValidatedFormula {
   formulation_notes?: string;
   verified_fields?: string[];
   estimated_fields?: string[];
+  process_dependent_fields?: string[];
+  notes_contain_numeric_claims?: boolean;
 }
 
 export interface RejectedFormula {

@@ -64,12 +64,19 @@ class FormulaIngredient(BaseModel):
 
 
 class CandidateFormula(BaseModel):
-    """The LLM's proposal. No nutrition fields by construction (see module doc)."""
+    """The LLM's proposal. No nutrition fields by construction (see module doc).
+
+    Deliberately carries no `overrun_pct`. Overrun sets how many grams of mix
+    are in a serving, so it is the divisor on every per-serving value — and
+    per-serving is the basis every clinical limit is checked against. A
+    model-supplied overrun would therefore let the model scale the numbers that
+    decide compliance. Overrun is derived from `product_format`, which the user
+    controls, or passed explicitly to `validate_candidate` by the caller.
+    """
     type: Literal["formula"] = "formula"
     product_name: str = Field(..., min_length=1)
     description: str = ""
     product_format: str = "standard"
-    overrun_pct: Optional[float] = Field(default=None, ge=0.0, le=300.0)
     ingredients: list[FormulaIngredient] = Field(..., min_length=1)
     formulation_notes: str = ""
 
@@ -107,7 +114,7 @@ class ComputedComposition(BaseModel):
     stabilizer_pct: float
     pac_total: float
     pod_total: float
-    scoopability_index: float  # model-estimated, 0–100
+    scoopability_index: float  # empirical index, not mass balance; 0–100
     total_cost_per_kg_usd: float
     allergens: list[str]
 
@@ -145,6 +152,14 @@ class ValidatedFormula(BaseModel):
     # Provenance labels for the UI's rule-verified vs model-estimated surface.
     verified_fields: list[str] = Field(default_factory=list)
     estimated_fields: list[str] = Field(default_factory=list)
+    # Verified, but also a function of the overrun assumption rather than of
+    # the formula alone. Same ingredients at a different product format give
+    # different values here.
+    process_dependent_fields: list[str] = Field(default_factory=list)
+    # True when model-authored prose (formulation_notes, per-line notes)
+    # contains a quantity. Those numbers are not computed by the domain and
+    # must not be presented as if they were.
+    notes_contain_numeric_claims: bool = False
 
 
 class RejectedFormula(BaseModel):

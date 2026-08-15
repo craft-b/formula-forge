@@ -27,10 +27,24 @@ formulation carries hard per-serving ceilings on phosphorus, potassium, and sodi
 A number that is confidently wrong by 40% is a safety issue, and it is undetectable by
 the person most likely to trust it — a reader who cannot recompute it themselves.
 
-So the architecture starts from a constraint rather than a capability: **no number the
-model produces is allowed to reach a user.** The model is used for the thing it is
-genuinely good at, proposing plausible ingredient structures, and is given no authority
-over anything that has to be true.
+So the architecture starts from a constraint rather than a capability: **no
+nutritional, cost or compliance number is model-produced — every one is computed from a
+governed ingredient library.** The model is used for the thing it is genuinely good at,
+proposing plausible ingredient structures, and is given no authority over anything that
+has to be true.
+
+That claim is deliberately narrower than "the model never emits a number". It does emit
+two kinds, and both are handled explicitly rather than wished away:
+
+- **Ingredient percentages** are the proposal itself. They are structure, they are
+  visible, and every figure derived from them is recomputed by the domain.
+- **Prose** in `formulation_notes` and per-line notes is unverifiable by construction. It
+  is rendered as model-authored, visually distinct from computed output, and flagged when
+  it contains a quantity the system never calculated.
+
+Everything else the model might try to assert is dropped at the boundary — including
+`overrun_pct`, which sets serving size and therefore divides every per-serving value the
+clinical rulesets are checked against.
 
 ## Architecture
 
@@ -121,9 +135,17 @@ rejection. The prompt explicitly tells the model not to report nutrition, becaus
 system computes it.
 
 **The model's numbers are structurally incapable of reaching the user.** `CandidateFormula`
-in [`domain/models.py`](backend/domain/models.py) has no nutrition fields. `_candidate_from_llm()`
-copies across exactly three things per line — `ref`, `percentage`, `notes` — and drops
-everything else. A model that emits `"nutrition_per_100g": {"calories": 1}` alongside a
+in [`domain/models.py`](backend/domain/models.py) has no nutrition fields and no
+`overrun_pct`. `_candidate_from_llm()` copies across exactly three things per line —
+`ref`, `percentage`, `notes` — and drops everything else.
+
+Overrun deserves its own line, because it is the subtle one. `serving_g = RACC / (1 +
+overrun) x density`, and every per-serving value is scaled by it, and every clinical limit
+is checked per serving. A model allowed to set overrun could shrink the serving until a
+non-compliant formula passed — on one dairy formulation the legal range moves phosphorus
+per serving from 115 mg to 29 mg and flips the renal verdict. Overrun now comes from the
+user's product format, or from an explicit argument to `validate_candidate()`. The test
+`test_model_cannot_move_a_clinical_verdict_via_overrun` pins it. A model that emits `"nutrition_per_100g": {"calories": 1}` alongside a
 dairy-heavy formulation has that object discarded at the boundary; the test
 `test_llm_supplied_nutrition_cannot_enter` pins the behaviour.
 
