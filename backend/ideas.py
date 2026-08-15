@@ -1,15 +1,24 @@
-"""Idea Stream — deterministic ranking over the governed trend corpus.
+"""Idea Stream — deterministic ranking over a curated trend corpus.
 
-The corpus (data/trend_ideas.json) is curated consumer-trend intelligence with
-attributed sources. This module computes each idea's score from the corpus's
-own versioned weights — the same doctrine as the formulation gate: the LLM has
-no say in the ranking, and changing weights or signals is a data change, not a
-code change.
+**This is a curated snapshot, not a live feed.** The corpus
+(data/trend_ideas.json) is hand-assembled: its `social`, `momentum` and
+`feasibility` values are analyst judgement on a 0-100 scale, informed by the
+listed references rather than computed from them. No collection pipeline
+exists. `docs/IDEA_STREAM.md` sets out what building the real thing would take.
+
+What *is* rigorous is everything downstream of the corpus: ranking is
+deterministic, driven by the corpus's own versioned weights, and the LLM has no
+say in it — the same doctrine as the formulation gate. Changing weights or
+signals is a data change, not a code change. Swap the hand-entered signals for
+measured ones and this module needs no edit.
 
 Score components (each 0-100):
   social      — normalized social-listening volume (given in corpus)
   momentum    — growth trajectory of the signal (given in corpus)
-  breadth     — distinct attributed sources, saturating at 6
+  breadth     — count of corroborating references, saturating at 6. Counts
+                references, not verified measurements; the references carry a
+                name and a note but no URL, so this is corroboration by
+                assertion.
   adoption    — lifecycle position mapped through the adoption curve
                 (expanding > artisan > mass > emerging: proven demand with
                 remaining whitespace ranks highest)
@@ -17,6 +26,7 @@ Score components (each 0-100):
 """
 from __future__ import annotations
 
+import datetime
 import json
 import os
 from functools import lru_cache
@@ -24,6 +34,33 @@ from functools import lru_cache
 _DATA_PATH = os.path.join(os.path.dirname(__file__), "domain", "data", "trend_ideas.json")
 
 _BREADTH_SATURATION = 6
+
+# Consumer flavour trends turn over in weeks, so this corpus ages fast. These
+# bounds are deliberately tight: a two-month-old snapshot is already a weak
+# basis for "what is trending".
+_CURRENT_MAX_DAYS = 30
+_AGING_MAX_DAYS = 90
+
+
+def _freshness(updated: str, today: datetime.date | None = None) -> dict:
+    """How stale the corpus is, so the UI can say so rather than imply currency."""
+    today = today or datetime.date.today()
+    try:
+        updated_on = datetime.date.fromisoformat(updated)
+    except (TypeError, ValueError):
+        return {"days_since_update": None, "status": "unknown",
+                "note": "Corpus date is missing or unparseable."}
+
+    days = (today - updated_on).days
+    if days <= _CURRENT_MAX_DAYS:
+        status, note = "current", "Curated within the last month."
+    elif days <= _AGING_MAX_DAYS:
+        status, note = ("aging",
+                        "Over a month old. Fast-moving signals may have shifted.")
+    else:
+        status, note = ("stale",
+                        "Over three months old. Treat rankings as historical.")
+    return {"days_since_update": days, "status": status, "note": note}
 
 
 @lru_cache(maxsize=1)
@@ -62,6 +99,8 @@ def ranked_ideas() -> dict:
     return {
         "dataset_version": corpus["dataset_version"],
         "updated": corpus["updated"],
+        "freshness": _freshness(corpus["updated"]),
+        "signal_basis": corpus.get("signal_basis", "analyst_judgement"),
         "methodology": corpus["methodology"],
         "scoring": scoring,
         "ideas": ideas,

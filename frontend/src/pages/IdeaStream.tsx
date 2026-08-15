@@ -1,4 +1,11 @@
-// The Idea Stream — a ranked think-tank of flavor/product concepts sourced
+// The Idea Stream — a ranked board of flavour/product concepts.
+//
+// The corpus behind it is a hand-curated snapshot: signal values are analyst
+// judgement, not measurements, and there is no collection pipeline. The
+// ranking over it is deterministic. The UI says both of those things out loud
+// rather than letting "stream" imply a live feed.
+// Original header comment follows.
+// A ranked think-tank of flavor/product concepts sourced
 // from consumer-trend intelligence (social listening, artisan menus, brand
 // launches, trend reports). Ranking is computed by the backend's deterministic
 // scoring engine over the governed corpus; every idea deep-links into the
@@ -29,11 +36,39 @@ interface Idea {
   breakdown: Record<string, number>
 }
 
+interface Freshness {
+  days_since_update: number | null
+  status: "current" | "aging" | "stale" | "unknown"
+  note: string
+}
+
 interface IdeasPayload {
   dataset_version: string
   updated: string
+  freshness?: Freshness
+  signal_basis?: string
   methodology: string
   ideas: Idea[]
+}
+
+const FRESHNESS_STYLE: Record<Freshness["status"], string> = {
+  current: "bg-teal-50 text-teal-700 border-teal-200",
+  aging: "bg-amber-50 text-amber-800 border-amber-200",
+  stale: "bg-rose-50 text-rose-700 border-rose-200",
+  unknown: "bg-slate-100 text-slate-600 border-slate-200",
+}
+
+function FreshnessChip({ freshness }: { freshness: Freshness }) {
+  const days = freshness.days_since_update
+  return (
+    <span
+      title={freshness.note}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-meta font-medium ${FRESHNESS_STYLE[freshness.status]}`}
+    >
+      <span className="uppercase tracking-[0.08em]">{freshness.status}</span>
+      {days !== null && <span className="num">· {days}d old</span>}
+    </span>
+  )
 }
 
 const SOURCE_STYLE: Record<IdeaSource["type"], string> = {
@@ -182,17 +217,29 @@ export default function IdeaStream() {
           The Idea Stream
         </h1>
         <p className="text-base text-slate-600 leading-relaxed max-w-2xl mt-4 ff-rise ff-rise-2">
-          Flavor and product concepts surfaced from social listening, artisan menus, brand
-          launches, and trend reports — ranked by a deterministic scoring engine, highest
-          probability first. Every idea drops straight into the workspace as a formulation brief.
+          Flavour and product concepts, ranked by a deterministic scoring engine and ready to
+          drop into the workspace as a formulation brief.
         </p>
-        {data && (
-          <p className="text-meta text-slate-500 mt-3 ff-rise ff-rise-3">
-            Corpus <span className="num">{data.dataset_version}</span> · updated{" "}
-            <span className="num">{data.updated}</span> · {data.ideas.length} concepts · score =
-            25% social + 25% momentum + 15% source breadth + 20% adoption stage + 15% formulation
-            feasibility
+        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 mt-4 max-w-2xl ff-rise ff-rise-2">
+          <p className="text-meta text-slate-600 leading-relaxed">
+            <span className="font-semibold text-slate-800">Curated snapshot, not a live feed.</span>{" "}
+            The signal values are analyst judgement informed by the references on each card —
+            they are not measured from social platforms, and no collection pipeline produces
+            them. The ranking over them is fully deterministic and would accept instrumented
+            signals unchanged. What a live version would require is written up in{" "}
+            <span className="font-medium text-slate-700">docs/IDEA_STREAM.md</span>.
           </p>
+        </div>
+        {data && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 text-meta text-slate-500 mt-3 ff-rise ff-rise-3">
+            {data.freshness && <FreshnessChip freshness={data.freshness} />}
+            <span>
+              Corpus <span className="num">{data.dataset_version}</span> · curated{" "}
+              <span className="num">{data.updated}</span> · {data.ideas.length} concepts · score =
+              25% social + 25% momentum + 15% corroborating references + 20% adoption stage +
+              15% formulation feasibility
+            </span>
+          </div>
         )}
 
         <div className="space-y-3 mt-8">
