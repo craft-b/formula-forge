@@ -6,7 +6,6 @@ no FastAPI, no LangGraph, no LLM.
 """
 from __future__ import annotations
 
-import math
 
 import pytest
 from hypothesis import given, settings
@@ -221,3 +220,104 @@ def test_llm_supplied_nutrition_cannot_enter():
     res = validate_candidate(cand, active_modules=[])
     # Energy is computed from milk, nowhere near the injected 99999.
     assert res.composition.nutrients_per_100g.energy_kcal < 200
+
+
+def test_llm_supplied_overrun_cannot_enter():
+    """Overrun divides every per-serving value, so the model must not set it.
+
+    serving_g = RACC / (1 + overrun) x density, and per-serving is the basis
+    every clinical limit is checked against. A model that could raise overrun
+    could shrink the serving and make a non-compliant formula pass.
+    """
+    payload = {
+        "product_name": "Sneaky overrun", "product_format": "premium",
+        "ingredients": [{"ref": "milk whole", "percentage": 100}],
+        "overrun_pct": 300.0,
+    }
+    cand = CandidateFormula.model_validate(payload)
+    assert not hasattr(cand, "overrun_pct")
+
+    res = validate_candidate(cand, active_modules=[])
+    # premium is 25% overrun, not the 300% the model asked for.
+    assert res.composition.overrun_pct == 25.0
+
+
+def test_overrun_authority_belongs_to_the_caller():
+    """The caller may still set overrun on the user's behalf."""
+    cand = CandidateFormula.model_validate({
+        "product_name": "Explicit", "product_format": "premium",
+        "ingredients": [{"ref": "milk whole", "percentage": 100}]})
+
+    from_format = validate_candidate(cand, active_modules=[])
+    from_caller = validate_candidate(cand, active_modules=[], overrun_pct=100.0)
+
+    assert from_format.composition.overrun_pct == 25.0
+    assert from_caller.composition.overrun_pct == 100.0
+    # Higher overrun means less mix per serving.
+    assert from_caller.composition.serving_g < from_format.composition.serving_g
+
+
+def test_model_cannot_move_a_clinical_verdict_via_overrun():
+    """The whole point: a renal verdict must not depend on model-supplied text."""
+    lines = [{"ref": "milk whole", "percentage": 58},
+             {"ref": "cream heavy", "percentage": 22},
+             {"ref": "sucrose", "percentage": 14},
+             {"ref": "nonfat dry milk", "percentage": 6}]
+
+    honest = CandidateFormula.model_validate({
+        "product_name": "Renal", "product_format": "premium",
+        "ingredients": lines})
+    gaming = CandidateFormula.model_validate({
+        "product_name": "Renal", "product_format": "premium",
+        "ingredients": lines, "overrun_pct": 300.0})
+
+    a = validate_candidate(honest, active_modules=["renal"])
+    b = validate_candidate(gaming, active_modules=["renal"])
+
+    assert a.composition.overrun_pct == b.composition.overrun_pct
+    assert (a.composition.nutrients_per_serving.potassium_mg
+            == b.composition.nutrients_per_serving.potassium_mg)
+    assert a.validation.passed == b.validation.passed
+
+
+def test_model_prose_with_quantities_is_flagged():
+    """Prose is the one surface the domain cannot verify, so it must be marked."""
+    plain = CandidateFormula.model_validate({
+        "product_name": "Plain", "product_format": "standard",
+        "ingredients": [{"ref": "milk whole", "percentage": 100}],
+        "formulation_notes": "Blend at high shear until smooth."})
+    claiming = CandidateFormula.model_validate({
+        "product_name": "Claiming", "product_format": "standard",
+        "ingredients": [{"ref": "milk whole", "percentage": 100}],
+        "formulation_notes": "Provides roughly 200 mg calcium per serving."})
+
+    assert validate_candidate(plain, active_modules=[]).notes_contain_numeric_claims is False
+    assert validate_candidate(claiming, active_modules=[]).notes_contain_numeric_claims is True
+
+
+def test_percentages_in_prose_are_not_flagged():
+    """The model may restate its own percentages; those the domain did verify."""
+    cand = CandidateFormula.model_validate({
+        "product_name": "Pct", "product_format": "standard",
+        "ingredients": [{"ref": "milk whole", "percentage": 100}],
+        "formulation_notes": "Holding sugar at 12% keeps the texture soft."})
+    assert validate_candidate(cand, active_modules=[]).notes_contain_numeric_claims is False
+
+
+def test_per_line_notes_are_scanned_too():
+    cand = CandidateFormula.model_validate({
+        "product_name": "Line notes", "product_format": "standard",
+        "ingredients": [{"ref": "milk whole", "percentage": 100,
+                         "notes": "Contributes about 120 mg potassium."}]})
+    assert validate_candidate(cand, active_modules=[]).notes_contain_numeric_claims is True
+
+
+def test_process_dependent_fields_are_labelled():
+    """serving_g and per-serving move with overrun, not with the formula."""
+    cand = CandidateFormula.model_validate({
+        "product_name": "Labels", "product_format": "premium",
+        "ingredients": [{"ref": "milk whole", "percentage": 100}]})
+    res = validate_candidate(cand, active_modules=[])
+    assert "serving_g" in res.process_dependent_fields
+    assert "nutrients_per_serving" in res.process_dependent_fields
+    assert "nutrients_per_100g" not in res.process_dependent_fields

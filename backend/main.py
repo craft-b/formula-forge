@@ -61,7 +61,10 @@ def _candidate_from_llm(raw: dict) -> CandidateFormula:
     """Adapt a raw LLM formula dict to a CandidateFormula (structure only).
 
     Any nutrition the LLM supplied is intentionally ignored — the domain layer
-    computes all nutrition from the governed ingredient library.
+    computes all nutrition from the governed ingredient library. `overrun_pct`
+    is dropped for the same reason: it divides every per-serving value, so
+    letting the model set it would hand it control of the numbers the clinical
+    rulesets are checked against.
     """
     ingredients = []
     for item in raw.get("ingredients", []):
@@ -74,7 +77,6 @@ def _candidate_from_llm(raw: dict) -> CandidateFormula:
         product_name=raw.get("product_name") or "Formula",
         description=raw.get("description", ""),
         product_format=raw.get("product_format") or "standard",
-        overrun_pct=raw.get("overrun_pct"),
         ingredients=ingredients,
         formulation_notes=raw.get("formulation_notes", ""),
     )

@@ -420,7 +420,7 @@ export function FormulaReport({
                   <td className="py-2 pl-3 hidden sm:table-cell align-middle">
                     <InlineBar value={ing.percentage} max={maxIngredient} />
                   </td>
-                  <td className="py-2 pl-3 text-meta text-slate-500 leading-snug hidden sm:table-cell">
+                  <td className="py-2 pl-3 text-meta text-slate-400 italic leading-snug hidden sm:table-cell">
                     {ing.notes}
                   </td>
                 </tr>
@@ -443,9 +443,19 @@ export function FormulaReport({
 
         {/* ── Notes ── */}
         {formula.formulation_notes && (
-          <section className="rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 ff-rise ff-rise-4">
-            <SectionTitle>Formulation notes</SectionTitle>
-            <div className="text-data text-slate-600 leading-relaxed -mt-1">
+          <section className="rounded-xl bg-slate-50 border border-dashed border-slate-300 px-4 py-3 ff-rise ff-rise-4">
+            <SectionTitle>Formulation notes — written by the model</SectionTitle>
+            <p className="text-meta text-slate-500 -mt-1 mb-2">
+              Prose, not computed output. Unlike the figures above, nothing here
+              was derived from the ingredient library.
+              {formula.notes_contain_numeric_claims && (
+                <span className="text-amber-700">
+                  {" "}It mentions quantities the system did not calculate — treat
+                  them as suggestions to check, not as results.
+                </span>
+              )}
+            </p>
+            <div className="text-data text-slate-600 leading-relaxed italic">
               <Markdown text={formula.formulation_notes} />
             </div>
           </section>

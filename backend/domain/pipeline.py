@@ -9,6 +9,8 @@ no other route from generation to the client — enforced by an integration test
 """
 from __future__ import annotations
 
+import re
+
 from . import constants as C
 from .composition import compute_composition, mass_balance_error
 from .models import (
@@ -22,23 +24,65 @@ from .models import (
 from .repository import IngredientRepository, get_repository
 from .validator import validate
 
-# Fields whose values are rule-verified (deterministically computed) vs
-# model-estimated. Surfaced to the UI so users know what is which.
+# Provenance surfaced to the UI. The distinction is about where a number's
+# authority comes from, not how hard it was to compute.
+#
+# Verified: derived by mass balance from the governed ingredient library. Given
+# the same ingredients and percentages, these are reproducible by hand.
 _VERIFIED_FIELDS = [
     "nutrients_per_100g", "nutrients_per_serving", "total_solids_pct", "fat_pct",
     "msnf_pct", "sugars_pct", "lactose_pct", "pac_total", "pod_total",
     "serving_g", "total_cost_per_kg_usd", "allergens",
 ]
+
+# Estimated: computed deterministically, but from an empirical relationship
+# rather than mass balance, so it carries model error of its own.
 _ESTIMATED_FIELDS = ["scoopability_index"]
 
+# Depends on the process assumption (overrun) as well as the formula. Overrun
+# comes from the user's product format or an explicit caller value — never from
+# the LLM — but a reader comparing two formulas should know that changing the
+# format moves these without any ingredient changing.
+_PROCESS_DEPENDENT_FIELDS = ["serving_g", "nutrients_per_serving", "overrun_pct"]
+
 _UNREPAIRABLE_ERROR = 40.0  # percentage points off 100 beyond which we reject
+
+# A bare number inside model-authored prose. Percentages are excluded: the
+# model legitimately discusses its own ingredient percentages, which the domain
+# has already verified. What this catches is prose asserting a quantity the
+# system never computed — "roughly 200 mg calcium per serving".
+_NUMERIC_CLAIM = re.compile(r"\d+(?:\.\d+)?\s*(?!%)(?:[a-zA-Z°]|$)")
+
+
+def _has_numeric_claim(*texts: str) -> bool:
+    """Whether model-authored prose asserts a quantity.
+
+    Model prose is the one surface the domain cannot verify. It is shown
+    because it is useful, but the UI needs to know when it contains numbers so
+    it can say they are unverified rather than letting them sit beside
+    rule-computed values looking identical.
+    """
+    return any(_NUMERIC_CLAIM.search(t or "") for t in texts)
 
 
 def validate_candidate(
     candidate: CandidateFormula,
     active_modules: list[str] | None = None,
     repo: IngredientRepository | None = None,
+    overrun_pct: float | None = None,
 ) -> ValidatedFormula | RejectedFormula:
+    """Turn an LLM structure proposal into something a user may see.
+
+    Args:
+        candidate: The model's proposal. Structure only — no nutrition, and
+            no overrun.
+        active_modules: Clinical rulesets to enforce.
+        repo: Ingredient library. Defaults to the governed one.
+        overrun_pct: Overrun supplied by the *caller* on the user's behalf.
+            None derives it from `candidate.product_format`. This parameter
+            exists so overrun stays user-controlled; nothing on the candidate
+            can reach it.
+    """
     active_modules = active_modules or []
     repo = repo or get_repository()
 
@@ -85,7 +129,7 @@ def validate_candidate(
     # 3. Compute composition deterministically (LLM numbers never enter here).
     pairs = list(zip(specs, [ln.percentage for ln in resolved]))
     comp: ComputedComposition = compute_composition(
-        pairs, candidate.product_format, candidate.overrun_pct)
+        pairs, candidate.product_format, overrun_pct)
 
     # 4. Validate (physical plausibility + active constraint modules).
     line_roles = {s.id: s.role for s in specs}
@@ -101,5 +145,10 @@ def validate_candidate(
         validation=report,
         formulation_notes=candidate.formulation_notes,
         verified_fields=_VERIFIED_FIELDS,
+        process_dependent_fields=_PROCESS_DEPENDENT_FIELDS,
+        notes_contain_numeric_claims=_has_numeric_claim(
+            candidate.formulation_notes,
+            *(ln.notes for ln in resolved),
+        ),
         estimated_fields=_ESTIMATED_FIELDS,
     )
