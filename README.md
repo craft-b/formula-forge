@@ -408,12 +408,22 @@ cd backend && python -m eval.live_eval --offline
 same path the API uses, deliberately, since an eval that reimplements the pipeline measures
 one that is not shipping — and scores schema validity, grounding in the governed library,
 first-pass gate rate, repair recovery, constraint targeting, and whether model prose asserts
-quantities the system never computed. It costs money and varies between runs, so it runs
-nightly rather than per-PR (`.github/workflows/llm-eval.yml`).
+quantities the system never computed. A full 46-brief run costs roughly 200k tokens — a
+free tier's entire daily allowance — so it runs **weekly on a stratified
+`--limit` sample**, not nightly on everything (`.github/workflows/llm-eval.yml`).
+An eval that starves the app it is measuring is not a measurement.
 
 ```bash
-cd backend && python -m eval.live_eval --json results.json --gate
+cd backend && python -m eval.live_eval --limit 24 --gate    # cheap sample
+cd backend && python -m eval.live_eval --json results.json  # the full set
 ```
+
+`--limit` draws evenly across categories and is seeded, so the same `--limit`
+means the same briefs and a movement in a rate means the model moved rather
+than the sample. Baselines must come from a full run — the tool refuses
+`--update-baseline` alongside `--limit`, because a subset baseline would be
+compared against full runs later and every rate would appear to shift for
+reasons of composition.
 
 Every rate carries a Wilson 95% interval, and the gate asks whether the run dropped below
 the interval the baseline recorded rather than below the baseline number. The distinction is

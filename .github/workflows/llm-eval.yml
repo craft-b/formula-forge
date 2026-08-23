@@ -1,31 +1,36 @@
-name: LLM eval (nightly)
+name: LLM eval (weekly)
 
 # The deterministic half of the eval runs in PR CI (`--offline`, no key, free).
-# This is the half that calls a real model: it costs money and its result moves
-# run to run, which is exactly why it does not belong on the PR path. A
-# nondeterministic gate on every pull request teaches people to re-run CI until
-# it goes green, and a gate nobody believes is worse than no gate.
+# This is the half that calls a real model, and it is scheduled weekly rather
+# than nightly for a reason that only became clear after running it once.
 #
-# Nightly instead: one scheduled run against the live model, gated on whether
-# any rate has dropped below the interval the baseline recorded. Results are
-# uploaded so a regression can be read case by case rather than guessed at.
+# A full 46-brief run costs roughly 200k tokens — which is the *entire* daily
+# allowance on Groq's free tier. Nightly, this job would consume the whole quota
+# before a single real user got a token, so the eval would be measuring an app
+# it had itself taken down. Weekly, with a stratified sample rather than the
+# full set, leaves the app most of its budget on the day it runs.
+#
+# It is also not on the PR path: a nondeterministic gate on every pull request
+# teaches people to re-run CI until it goes green, and a gate nobody believes is
+# worse than no gate.
 
 on:
   schedule:
-    - cron: "0 7 * * *"   # 07:00 UTC daily
+    - cron: "0 7 * * 0"   # Sundays, 07:00 UTC
   workflow_dispatch:
     inputs:
+      limit:
+        description: "Briefs to run (0 = all 46, ~200k tokens = a full free-tier day)"
+        type: string
+        default: "24"
       update_baseline:
-        description: "Record this run as the new baseline (after a deliberate improvement)"
+        description: "Record as the new baseline — requires a full run (limit 0)"
         type: boolean
         default: false
 
 jobs:
   live-eval:
     runs-on: ubuntu-latest
-    # A missing key would otherwise fail every night on a fork or after a
-    # secret rotation, and a workflow that is always red gets ignored.
-    if: github.repository_owner != ''
     steps:
       - uses: actions/checkout@v4
 
@@ -42,12 +47,15 @@ jobs:
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           LLM_PROVIDER: groq
-          GROQ_MODEL: llama-3.3-70b-versatile
-          # One model, no silent fallback: a run that quietly degrades to the
-          # 8b model would report that model's quality under the 70b's name.
+          GROQ_MODEL: openai/gpt-oss-120b
+          # One model, no silent fallback: a run that quietly degraded to the
+          # smaller model would report that model's quality under this one's
+          # name. Production keeps its fallback; the measurement does not.
           ENABLE_LLM_FALLBACK: "false"
+          LIMIT: ${{ inputs.limit || '24' }}
         run: |
           python -m eval.live_eval \
+            --limit "$LIMIT" \
             --json eval-results.json \
             --markdown eval-report.md \
             --gate
@@ -65,13 +73,20 @@ jobs:
           path: |
             backend/eval-results.json
             backend/eval-report.md
-          retention-days: 30
+          retention-days: 90
 
+      # Only ever from a full run: a baseline drawn from a subset would be
+      # compared against full runs later, and every rate would appear to move
+      # for reasons of composition rather than quality. live_eval refuses the
+      # combination outright, so this step passes no --limit.
       - name: Update the baseline
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_baseline }}
         working-directory: backend
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          LLM_PROVIDER: groq
+          GROQ_MODEL: openai/gpt-oss-120b
+          ENABLE_LLM_FALLBACK: "false"
         run: |
           python -m eval.live_eval --update-baseline
           git config user.name "github-actions[bot]"

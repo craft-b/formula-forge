@@ -15,8 +15,10 @@ safety-critical half: if a renal brief fails to activate the renal ruleset,
 the formula is never checked against it and passes silently.
 
 **Live** (default) additionally runs real generation through the production
-path in `generation.parse_and_validate` and scores what comes back. Costs
-money and varies run to run, so it belongs in a nightly job.
+path in `generation.parse_and_validate` and scores what comes back. A full
+46-brief run costs roughly a free tier's entire daily token allowance, so it
+runs weekly on a stratified `--limit` sample rather than nightly on everything
+— an eval that starves the app it is measuring is not a measurement.
 
 Rates are reported with a Wilson 95% interval, because at these sample sizes a
 few points of movement is usually noise and a gate that fires on noise gets
@@ -26,9 +28,9 @@ number — see its docstring for why that distinction decides whether the gate
 survives contact with a nondeterministic model.
 
     python -m eval.live_eval --offline
+    python -m eval.live_eval --limit 24 --gate      # cheap, stratified sample
     python -m eval.live_eval --json results.json
-    python -m eval.live_eval --gate                 # non-zero exit on regression
-    python -m eval.live_eval --update-baseline
+    python -m eval.live_eval --update-baseline      # full run only
 """
 from __future__ import annotations
 
@@ -36,6 +38,7 @@ import argparse
 import json
 import math
 import os
+import random
 import sys
 import time
 from dataclasses import dataclass, field, asdict
@@ -148,6 +151,54 @@ class CaseResult:
 
 def load_cases() -> list[dict]:
     return json.loads(BRIEFS.read_text(encoding="utf-8"))["cases"]
+
+
+def sample_cases(cases: list[dict], limit: int, seed: int = 0) -> list[dict]:
+    """A stratified subset of `limit` briefs, one category at a time.
+
+    Cost, not convenience, is why this exists. A full run is ~46 generations
+    plus repairs — about 200k tokens, which is the entire daily allowance on
+    Groq's free tier. Scheduling that nightly would consume the whole quota
+    before a single real user got a token.
+
+    Two properties matter and they pull against each other. Taking the first N
+    cases would test renal every time and vegan never, so the draw is stratified
+    across categories. But a *different* draw each run makes rates jump because
+    the sample changed rather than because quality did — so the draw is seeded
+    and deterministic. Same `--limit` and `--seed` means the same briefs, and a
+    movement in the number means something.
+
+    That comparability is only within a fixed sample. Comparing a sampled run
+    against a full-run baseline is not meaningful, which is why
+    `--update-baseline` refuses to record one.
+    """
+    if limit >= len(cases) or limit <= 0:
+        return cases
+
+    by_category: dict[str, list[dict]] = {}
+    for case in cases:
+        by_category.setdefault(case["category"], []).append(case)
+
+    rng = random.Random(seed)
+    for group in by_category.values():
+        rng.shuffle(group)
+
+    # Round-robin across categories so a small limit still spans all of them.
+    picked: list[dict] = []
+    order = sorted(by_category)
+    while len(picked) < limit:
+        took_any = False
+        for category in order:
+            if by_category[category]:
+                picked.append(by_category[category].pop())
+                took_any = True
+                if len(picked) == limit:
+                    break
+        if not took_any:
+            break
+
+    chosen = {c["id"] for c in picked}
+    return [c for c in cases if c["id"] in chosen]  # keep file order, stable output
 
 
 #: Exceptions that say nothing about the model's output. A 429 is the provider
@@ -429,6 +480,14 @@ def main() -> int:
     parser.add_argument("--update-baseline", action="store_true",
                         help="Record this run as the new baseline.")
     parser.add_argument("--only", help="Run one category only.")
+    parser.add_argument(
+        "--limit", type=int, default=0,
+        help="Run at most N briefs, drawn evenly across categories and seeded "
+        "so the same N is the same briefs. A full run costs roughly a free "
+        "tier's entire daily token allowance.")
+    parser.add_argument(
+        "--seed", type=int, default=0,
+        help="Changes which briefs --limit draws. Hold it fixed to compare runs.")
     args = parser.parse_args()
 
     cases = load_cases()
@@ -437,6 +496,19 @@ def main() -> int:
         if not cases:
             print(f"No cases in category {args.only!r}")
             return 1
+
+    sampled = bool(args.limit and args.limit < len(cases))
+    if sampled:
+        cases = sample_cases(cases, args.limit, args.seed)
+
+    # A baseline drawn from a subset would be compared against full runs later,
+    # and every rate would appear to move for reasons of composition rather than
+    # quality. Refuse rather than quietly record a number that cannot be met.
+    if args.update_baseline and sampled:
+        print(f"Refusing to record a baseline from a {len(cases)}-brief sample.\n"
+              "Baselines must come from a full run, or later comparisons measure "
+              "the sample rather than the model. Drop --limit.")
+        return 1
 
     live = not args.offline
     if live:
@@ -491,6 +563,11 @@ def main() -> int:
                   "Run with --update-baseline first.")
             return 0
         baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
+        if sampled:
+            print(f"\nNote: gating a {len(cases)}-brief sample against a "
+                  f"{baseline.get('n_cases', '?')}-brief baseline. A smaller "
+                  "sample has wider intervals, so this is lenient by "
+                  "construction; the full run is the one that decides.")
         failures = check_gate(rates, baseline)
         if failures:
             print("\nEVAL GATE FAILED\n")

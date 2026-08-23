@@ -378,3 +378,45 @@ class TestErrorClassification:
         assert rates["schema_valid"].point == 1.0
         assert rates["provider_answered"].successes == 1
         assert rates["provider_answered"].n == 2
+
+
+class TestSampling:
+    """--limit exists for cost: a full run is a free tier's whole daily quota."""
+
+    CASES = live_eval.load_cases()
+
+    def test_spans_every_category(self):
+        """Taking the first N would test renal every run and vegan never."""
+        picked = live_eval.sample_cases(self.CASES, 12, seed=0)
+        assert len(picked) == 12
+        assert len({c["category"] for c in picked}) == \
+            len({c["category"] for c in self.CASES})
+
+    def test_is_deterministic_for_a_given_seed(self):
+        """Otherwise a rate moves because the sample changed, not the model."""
+        a = live_eval.sample_cases(self.CASES, 12, seed=0)
+        b = live_eval.sample_cases(self.CASES, 12, seed=0)
+        assert [c["id"] for c in a] == [c["id"] for c in b]
+
+    def test_the_seed_changes_the_draw(self):
+        a = live_eval.sample_cases(self.CASES, 12, seed=0)
+        b = live_eval.sample_cases(self.CASES, 12, seed=7)
+        assert [c["id"] for c in a] != [c["id"] for c in b]
+
+    @pytest.mark.parametrize("limit", [0, -1, 999])
+    def test_a_meaningless_limit_returns_everything(self, limit):
+        assert len(live_eval.sample_cases(self.CASES, limit)) == len(self.CASES)
+
+    def test_output_keeps_file_order(self):
+        """Stable ordering keeps run-to-run diffs readable."""
+        picked = live_eval.sample_cases(self.CASES, 15, seed=3)
+        order = [c["id"] for c in self.CASES]
+        assert [c["id"] for c in picked] == [i for i in order
+                                             if i in {c["id"] for c in picked}]
+
+    def test_a_small_limit_still_reaches_adversarial_cases(self):
+        """Cheap runs must not quietly drop the cases that find bugs."""
+        picked = live_eval.sample_cases(self.CASES, 10, seed=0)
+        categories = {c["category"] for c in picked}
+        assert "contradiction" in categories
+        assert "off_domain" in categories
