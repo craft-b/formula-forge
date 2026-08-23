@@ -109,3 +109,108 @@ class TestNoSecretLeakage:
                 client.get("/health")
         model.invoke.assert_not_called()
         graph.astream_events.assert_not_called()
+
+
+# ── Model existence (the outage /health could not see) ────────────────────────
+
+class TestModelAvailabilityCheck:
+    """A configured model that no longer exists must not read as healthy.
+
+    Groq retired llama-3.3-70b-versatile and llama-3.1-8b-instant. /health kept
+    reporting "ok" because its probes take no network call by design, so it was
+    answering "is a client constructed" when the question that mattered was
+    "does this model still exist". Production 404'd on every request behind a
+    green probe.
+    """
+
+    @staticmethod
+    def _groq_returning(model_ids):
+        class _Model:
+            def __init__(self, mid):
+                self.id = mid
+
+        class _Models:
+            def list(self):
+                return type("R", (), {"data": [_Model(m) for m in model_ids]})()
+
+        class _Client:
+            models = _Models()
+
+        return lambda *a, **k: _Client()
+
+    def test_a_present_model_verifies(self, monkeypatch):
+        import llm
+
+        monkeypatch.setenv("VERIFY_MODEL_ON_STARTUP", "true")
+        monkeypatch.setattr("groq.Groq", self._groq_returning(["openai/gpt-oss-120b"]))
+        status, detail = llm.verify_model_available("openai/gpt-oss-120b")
+        assert status == "ok"
+        assert "openai/gpt-oss-120b" in detail
+
+    def test_a_retired_model_is_reported_missing(self, monkeypatch):
+        """The actual outage, reproduced."""
+        import llm
+
+        monkeypatch.setenv("VERIFY_MODEL_ON_STARTUP", "true")
+        monkeypatch.setattr("groq.Groq",
+                            self._groq_returning(["openai/gpt-oss-120b",
+                                                  "openai/gpt-oss-20b"]))
+        status, detail = llm.verify_model_available("llama-3.3-70b-versatile")
+        assert status == "missing"
+        assert "404" in detail
+
+    def test_the_hint_names_alternatives_from_the_same_provider(self, monkeypatch):
+        import llm
+
+        monkeypatch.setenv("VERIFY_MODEL_ON_STARTUP", "true")
+        monkeypatch.setattr("groq.Groq",
+                            self._groq_returning(["openai/gpt-oss-120b",
+                                                  "openai/gpt-oss-20b",
+                                                  "qwen/qwen3.6-27b"]))
+        _, detail = llm.verify_model_available("openai/gpt-oss-999b")
+        assert "openai/gpt-oss-120b" in detail
+        assert "qwen/qwen3.6-27b" not in detail, "only same-provider suggestions"
+
+    def test_a_verification_failure_never_reports_missing(self, monkeypatch):
+        """A flaky metadata call must not take a working instance out of rotation.
+
+        Only a definitive absence is 'missing'; anything else is 'unverified'.
+        """
+        import llm
+
+        monkeypatch.setenv("VERIFY_MODEL_ON_STARTUP", "true")
+
+        def _boom(*a, **k):
+            raise RuntimeError("network down")
+
+        monkeypatch.setattr("groq.Groq", _boom)
+        status, detail = llm.verify_model_available("openai/gpt-oss-120b")
+        assert status == "unverified"
+        assert "RuntimeError" in detail
+
+    def test_verification_can_be_switched_off(self, monkeypatch):
+        import llm
+
+        monkeypatch.setenv("VERIFY_MODEL_ON_STARTUP", "false")
+
+        def _must_not_be_called(*a, **k):
+            raise AssertionError("no network call when verification is disabled")
+
+        monkeypatch.setattr("groq.Groq", _must_not_be_called)
+        status, _ = llm.verify_model_available("anything")
+        assert status == "unverified"
+
+    def test_the_probe_turns_a_missing_model_into_503(self, monkeypatch):
+        """End of the chain: a missing model must fail readiness, not pass it."""
+        import main
+        from fastapi.testclient import TestClient
+
+        monkeypatch.setattr(main.app.state, "model_check",
+                            ("missing", "Model 'gone' does not exist — 404."),
+                            raising=False)
+        with TestClient(main.app) as client:
+            # TestClient runs lifespan, which would overwrite model_check.
+            main.app.state.model_check = ("missing", "Model 'gone' does not exist — 404.")
+            body = client.get("/health").json()
+        assert body["dependencies"]["llm_client"]["status"] == "unavailable"
+        assert body["status"] != "ok"

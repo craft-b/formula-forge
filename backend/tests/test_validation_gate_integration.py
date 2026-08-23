@@ -11,6 +11,7 @@ import json
 import pytest
 from unittest.mock import patch
 
+import generation
 import main
 
 
@@ -62,7 +63,12 @@ async def test_formula_path_always_routes_through_validation_gate():
     from langchain_core.messages import HumanMessage
     with patch("main.agent") as m:
         m.astream_events = _formula_stream_factory(payload)
-        with patch("main.validate_candidate", wraps=main.validate_candidate) as spy:
+        # Spy on generation, not main: the parse-and-validate adapter moved
+        # there so the live eval exercises the same path the API does. The
+        # guarantee under test is unchanged — generation.parse_and_validate is
+        # the only route from a model proposal to a user-visible formula.
+        with patch("generation.validate_candidate",
+                   wraps=generation.validate_candidate) as spy:
             chunks = await _collect(
                 main._stream_agent([HumanMessage(content="renal formula")],
                                    "sess-gate", active_modules=["renal"]))

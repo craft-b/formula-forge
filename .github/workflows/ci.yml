@@ -30,6 +30,12 @@ jobs:
           GROQ_MODEL: llama-3.3-70b-versatile
         run: pytest tests/ -v
 
+      - name: Routing eval (offline — no API key, gates against baseline)
+        working-directory: backend
+        env:
+          GROQ_API_KEY: test-key-ci-placeholder
+        run: python -m eval.live_eval --offline --gate
+
       - name: Check generated frontend types are in sync
         working-directory: backend
         env:

@@ -15,13 +15,27 @@ formula_llm = llm.bind(response_format={"type": "json_object"})
 # and natural phrasing variants that the old substring list missed, e.g.:
 #   "let me formulate", "I need you to formulate a shake",
 #   "build me an oncology formula", "can we develop a new recipe for..."
+# What this application actually makes. The pattern used to accept only
+# "formula | formulation | recipe | product", so "build me a frozen dessert" and
+# "create a chocolate ice cream" — the two most natural ways to ask for the
+# product — routed to Q&A instead of generation (eval finding F-E1).
+_PRODUCT_NOUN = (
+    r"(?:formulations?|formulas?|recipes?|products?|desserts?"
+    r"|ice\s*creams?|gelatos?|sorbets?|sherbets?|soft[\s-]?serves?)"
+)
+
 _FORMULATION_RE = re.compile(
     r"\b(?:"
     r"formulate[sd]?|formulating"
-    r"|(?:create|build|make|generate|design|develop|draft)\s+(?:me\s+)?an?(?:\s+[\w-]+){0,4}\s+(?:formula|formulation|recipe|product)"
-    r"|new\s+(?:formula|formulation|recipe)"
-    r"|(?:formula|recipe)\s+for\b"
-    r"|i\s+need\s+a\s+formula"
+    # A verb, up to four words of description, then the thing itself.
+    r"|(?:create|build|make|generate|design|develop|draft|need|want)"
+    r"\s+(?:me\s+)?(?:an?|some)?(?:\s+[\w-]+){0,4}\s+" + _PRODUCT_NOUN +
+    r"|new\s+" + _PRODUCT_NOUN +
+    r"|" + _PRODUCT_NOUN + r"\s+for\b"
+    # Bare noun, no verb: operators type "renal formula" and "vegan formula
+    # please". Restricted to the unambiguous nouns — a bare "dessert" turns up
+    # in plenty of questions, but nobody asks this system "what is a formula".
+    r"|formulations?|formulas?"
     r")",
     re.IGNORECASE,
 )
@@ -51,11 +65,38 @@ def detect_intent(message: str) -> Literal["formulate", "search"]:
 
 # Maps a dietary-constraint module to the phrases that activate it. Keyword-based
 # by design (same rationale as detect_intent): deterministic and zero-latency.
+# Three failure modes these patterns must avoid, each found by the live eval:
+#
+#   Under-firing is the dangerous one (F-E3). A missed module means the ruleset
+#   never runs, the formula validates against nothing, and it passes looking
+#   clean — no error anywhere. `\bdialysis\b` cannot match inside
+#   "hemodialysis"; `\bdiabet\w*` cannot match inside "prediabetic". Both are
+#   ordinary clinical words, so those stems now allow a leading prefix.
+#
+#   Over-firing on an ingredient name (F-E2). `non[\s-]?fat` fired on the
+#   ingredient "nonfat dry milk", imposing a low-fat clinical ceiling nobody
+#   asked for. A lookahead excludes the dairy-ingredient sense.
+#
+#   Missing the vocabulary entirely (F-E4). "nephrology", "blood glucose" and a
+#   numeric protein target carry unambiguous clinical intent and matched
+#   nothing at all.
 _MODULE_PATTERNS: dict[str, re.Pattern] = {
-    "renal": re.compile(r"\b(renal|kidney|ckd|dialysis|low[\s-]?phosphorus|low[\s-]?potassium|low[\s-]?sodium)\b", re.I),
-    "diabetic": re.compile(r"\b(diabet\w*|low[\s-]?glyc-?emic|low[\s-]?sugar|sugar[\s-]?free|no[\s-]?sugar|reduced[\s-]?sugar)\b", re.I),
-    "high_protein": re.compile(r"\b(high[\s-]?protein|protein[\s-]?(enriched|fortified|packed)|added protein)\b", re.I),
-    "low_fat": re.compile(r"\b(low[\s-]?fat|reduced[\s-]?fat|fat[\s-]?free|non[\s-]?fat)\b", re.I),
+    "renal": re.compile(
+        r"\b(renal|kidney|ckd|esrd|nephrolog\w*|end[\s-]?stage\s+renal"
+        r"|[a-z]*dialysis"
+        r"|low[\s-]?phosphorus|low[\s-]?potassium|low[\s-]?sodium)\b", re.I),
+    "diabetic": re.compile(
+        # glyca?emic covers both spellings: "glycemic" and "glycaemic". A
+        # character class of [ae] does not — the British form has both letters.
+        r"\b((?:pre)?diabet\w*|low[\s-]?glyc-?a?emic|glyca?emic\s+(?:index|load)"
+        r"|blood\s+(?:glucose|sugar)|low[\s-]?sugar|sugar[\s-]?free"
+        r"|no[\s-]?sugar|reduced[\s-]?sugar)\b", re.I),
+    "high_protein": re.compile(
+        r"\b(high[\s-]?protein|protein[\s-]?(enriched|fortified|packed)"
+        r"|added protein|\d+\s*g(?:rams?)?\s+(?:of\s+)?protein)\b", re.I),
+    "low_fat": re.compile(
+        r"\b(low[\s-]?fat|reduced[\s-]?fat|fat[\s-]?free"
+        r"|non[\s-]?fat(?!\s+(?:dry\s+)?milk))\b", re.I),
     "vegan": re.compile(r"\b(vegan|dairy[\s-]?free|plant[\s-]?based|non[\s-]?dairy)\b", re.I),
     "dysphagia_iddsi": re.compile(r"\b(dysphagia|iddsi|thickened|texture[\s-]?modified|swallow\w*)\b", re.I),
 }

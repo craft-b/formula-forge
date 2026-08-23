@@ -385,6 +385,57 @@ runs in CI without an API key. Coverage by area:
   run through the validator with no LLM involved. CI fails if schema validity or compliance
   accuracy drops below 100%, or if the case set shrinks below 15.
 
+### Evaluating the model, not just the math
+
+`test_golden_eval.py` guards the deterministic half. The other half of this system is a
+language model, and every test above mocks it — so a prompt edit, a temperature change or a
+Groq model deprecation could degrade generation badly while CI stayed green.
+
+`eval/live_eval.py` closes that, in two modes.
+
+**Offline** scores the deterministic routing layer against 46 labelled briefs — does this
+brief reach the right agent, and does it activate the right constraint rulesets. No API key,
+no cost, no nondeterminism, so it runs on every pull request and gates against a recorded
+baseline. It is also the more safety-critical half: a renal brief that fails to activate the
+renal ruleset produces a formula that was never checked against it, and nothing downstream
+notices.
+
+```bash
+cd backend && python -m eval.live_eval --offline
+```
+
+**Live** additionally runs real generation through `generation.parse_and_validate` — the
+same path the API uses, deliberately, since an eval that reimplements the pipeline measures
+one that is not shipping — and scores schema validity, grounding in the governed library,
+first-pass gate rate, repair recovery, constraint targeting, and whether model prose asserts
+quantities the system never computed. A full 46-brief run costs roughly 200k tokens — a
+free tier's entire daily allowance — so it runs **weekly on a stratified
+`--limit` sample**, not nightly on everything (`.github/workflows/llm-eval.yml`).
+An eval that starves the app it is measuring is not a measurement.
+
+```bash
+cd backend && python -m eval.live_eval --limit 24 --gate    # cheap sample
+cd backend && python -m eval.live_eval --json results.json  # the full set
+```
+
+`--limit` draws evenly across categories and is seeded, so the same `--limit`
+means the same briefs and a movement in a rate means the model moved rather
+than the sample. Baselines must come from a full run — the tool refuses
+`--update-baseline` alongside `--limit`, because a subset baseline would be
+compared against full runs later and every rate would appear to shift for
+reasons of composition.
+
+Every rate carries a Wilson 95% interval, and the gate asks whether the run dropped below
+the interval the baseline recorded rather than below the baseline number. The distinction is
+what keeps the gate alive: with a baseline of 46/46, the stricter comparison fails on the
+very next run that scores 45/46, and a gate that cries wolf gets switched off within a week.
+
+The briefs are labelled in `eval/briefs.json` and cover each ruleset alone and in
+combination, natural operator phrasing, deliberate contradictions ("a vegan ice cream using
+heavy cream"), unsatisfiable requests, prompt injection, and terse or rambling input. The
+current baseline is in `eval/baseline.json`; see `docs/EVAL_FINDINGS.md` for what the first
+run surfaced.
+
 ## What is deliberately not built yet
 
 **Authentication.** `/api/chat` is open. The rate limit and token budget bound the damage,
