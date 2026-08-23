@@ -242,3 +242,86 @@ class TestSummarise:
             live_eval.summarise(cases, results, live=False), results, live=False)
         assert "| Metric |" in report
         assert "intent_routing" in report
+
+
+class TestRepairPathEndToEnd:
+    """The repair branch, exercised for real against a stubbed provider.
+
+    Every other test here patches `_invoke_formula`, which skips the whole
+    repair chain — and the nightly workflow runs with repair ON. Patching at the
+    LLM object instead lets the real code run: build_formula_messages →
+    formula_llm.invoke → extract_json_block → parse_and_validate →
+    _repair_feedback → regenerate_formula → invoke again. A signature or
+    attribute error in there would otherwise first appear at 07:00 UTC in CI
+    with nobody watching.
+    """
+
+    CASE = {"id": "renal_repair", "brief": "Formulate a renal-safe dessert",
+            "expect_modules": ["renal"], "expect_intent": "formulate",
+            "expect_gate_pass": True, "category": "single_module"}
+
+    # Dairy-heavy: fails the renal ruleset on potassium/phosphorus.
+    FAILING = json.dumps({
+        "type": "formula", "product_name": "Rich Dairy",
+        "product_format": "premium",
+        "ingredients": [
+            {"ref": "cream heavy", "percentage": 30},
+            {"ref": "nonfat dry milk", "percentage": 12},
+            {"ref": "sucrose", "percentage": 14},
+            {"ref": "milk whole", "percentage": 43.4},
+            {"ref": "locust bean gum", "percentage": 0.6},
+        ],
+        "formulation_notes": "",
+    })
+
+    class _Reply:
+        def __init__(self, content):
+            self.content = content
+
+    def _fake_llm(self, replies: list[str], seen: list):
+        class _LLM:
+            def invoke(_self, messages):
+                seen.append(messages)
+                return TestRepairPathEndToEnd._Reply(replies[min(len(seen) - 1,
+                                                                len(replies) - 1)])
+        return _LLM()
+
+    def test_a_failed_formula_is_repaired_and_scored(self):
+        seen: list = []
+        results = live_eval.score_routing([self.CASE])
+        with patch("graph.formula_llm", self._fake_llm([self.FAILING, _GOOD_FORMULA], seen)):
+            live_eval.score_generation([self.CASE], results, repair=True)
+
+        result = results[0]
+        assert result.gate_passed_first is False, "the dairy formula must fail renal"
+        assert result.gate_passed_after_repair is True, "the retry should clear it"
+        assert len(seen) == 2, "exactly one repair call, as in production"
+
+    def test_the_repair_prompt_carries_the_violation_feedback(self):
+        """A retry that is not told what broke is just a second guess."""
+        seen: list = []
+        results = live_eval.score_routing([self.CASE])
+        with patch("graph.formula_llm", self._fake_llm([self.FAILING, _GOOD_FORMULA], seen)):
+            live_eval.score_generation([self.CASE], results, repair=True)
+
+        retry_prompt = "".join(m.content for m in seen[1])
+        assert "REJECTED" in retry_prompt
+        assert "renal." in retry_prompt, "the failing rule id should reach the model"
+
+    def test_a_repair_that_also_fails_is_recorded_not_raised(self):
+        seen: list = []
+        results = live_eval.score_routing([self.CASE])
+        with patch("graph.formula_llm", self._fake_llm([self.FAILING, self.FAILING], seen)):
+            live_eval.score_generation([self.CASE], results, repair=True)
+        assert results[0].gate_passed_after_repair is False
+
+    def test_a_passing_first_attempt_costs_no_repair_call(self):
+        """Cost control: repair must not fire when nothing is wrong."""
+        seen: list = []
+        case = dict(self.CASE, id="vegan_ok", brief="Formulate a vegan frozen dessert",
+                    expect_modules=["vegan"])
+        results = live_eval.score_routing([case])
+        with patch("graph.formula_llm", self._fake_llm([_GOOD_FORMULA], seen)):
+            live_eval.score_generation([case], results, repair=True)
+        assert results[0].gate_passed_first is True
+        assert len(seen) == 1, "no repair call should have been made"
