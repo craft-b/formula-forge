@@ -31,6 +31,7 @@ from domain import CandidateFormula, validate_candidate
 from generation import candidate_from_llm as _candidate_from_llm
 from generation import parse_and_validate as _parse_and_validate
 from json_utils import extract_json_block
+from llm import verify_model_available
 from budget import TokenBudget, estimate_tokens
 from observability import new_request_id, request_id_var, setup_logging
 
@@ -167,6 +168,15 @@ async def lifespan(app: FastAPI):
         "ENABLED" if settings.langchain_tracing_v2 else "disabled",
         groq_key_fingerprint(),
     )
+
+    # Verify the configured model exists, once, and cache the verdict for the
+    # readiness probe. A retired model previously sat behind a green /health
+    # while every generation request 404'd; the probes take no network call by
+    # design, so the check has to happen here instead.
+    status, detail = verify_model_available(_active_model())
+    app.state.model_check = (status, detail)
+    log = logger.error if status == "missing" else logger.info
+    log("Model readiness: %s — %s", status, detail)
     yield
 
 
@@ -264,7 +274,13 @@ def _active_model() -> str:
 
 
 def _probe_llm_client() -> dict:
-    """Is a chat model configured and constructed? No network call.
+    """Is a chat model configured, constructed, and does it still exist?
+
+    Still no network call: the third question is answered from the verdict
+    `lifespan` cached at startup. That indirection is the point — a configured
+    model that has since been retired used to report "ok" here while every
+    generation request failed with 404, because "constructed" and "exists" are
+    different questions and only the first was being asked.
 
     `groq_key_fingerprint()` is used ONLY as a presence oracle. Its return value
     carries the key's exact length plus an 11-character window of the key — safe
@@ -276,7 +292,16 @@ def _probe_llm_client() -> dict:
     # one check covers both routes.
     if formula_llm is None or not hasattr(formula_llm, "invoke"):
         return {"status": "unavailable", "detail": "Chat model failed to initialize."}
-    return {"status": "ok", "detail": "API key configured; chat model initialized."}
+
+    status, detail = getattr(app.state, "model_check", ("unverified", "Not yet checked."))
+    if status == "missing":
+        return {"status": "unavailable", "detail": detail}
+    if status == "unverified":
+        # Could not confirm either way. Do not fail a possibly-working instance
+        # over a metadata call, but do not claim it is verified either.
+        return {"status": "ok",
+                "detail": f"API key configured; chat model initialized. {detail}"}
+    return {"status": "ok", "detail": f"API key configured; chat model initialized. {detail}"}
 
 
 def _probe_agent_graph() -> dict:

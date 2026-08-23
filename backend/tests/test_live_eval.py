@@ -325,3 +325,56 @@ class TestRepairPathEndToEnd:
             live_eval.score_generation([case], results, repair=True)
         assert results[0].gate_passed_first is True
         assert len(seen) == 1, "no repair call should have been made"
+
+
+class TestErrorClassification:
+    """A provider refusing to answer is not a model-quality failure.
+
+    On the first live run, nine of ten apparent schema failures were 429s from
+    the free tier's token ceiling. Scored as quality they reported 76% schema
+    validity when the model had produced valid JSON for 30 of the 31 briefs it
+    was allowed to answer.
+    """
+
+    @pytest.mark.parametrize("error", [
+        "RateLimitError: Error code: 429 - tokens per minute (TPM)",
+        "APITimeoutError: request timed out",
+        "APIConnectionError: connection reset",
+        "InternalServerError: Error code: 503",
+    ])
+    def test_provider_failures_are_infrastructure(self, error):
+        assert live_eval.classify_error(error) == "infrastructure"
+
+    @pytest.mark.parametrize("error", [
+        "unparseable",
+        "unresolved ingredients",
+        "ValueError: percentage must be numeric",
+    ])
+    def test_model_failures_are_quality(self, error):
+        assert live_eval.classify_error(error) == "quality"
+
+    def test_no_error_classifies_as_nothing(self):
+        assert live_eval.classify_error("") == ""
+
+    def test_throttled_cases_leave_the_quality_rates(self):
+        """The correction, end to end: a 429 must not depress schema_valid."""
+        cases = [
+            {"id": "ok", "brief": "Formulate a vegan frozen dessert",
+             "expect_modules": ["vegan"], "expect_intent": "formulate",
+             "expect_gate_pass": True, "category": "single_module"},
+            {"id": "throttled", "brief": "Formulate a premium vanilla ice cream",
+             "expect_modules": [], "expect_intent": "formulate",
+             "expect_gate_pass": True, "category": "plain"},
+        ]
+        results = live_eval.score_routing(cases)
+        results[0].generated = True
+        results[0].resolved = True
+        results[0].gate_passed_first = True
+        results[1].error = "RateLimitError: Error code: 429"
+        results[1].error_kind = "infrastructure"
+
+        rates = {r.name: r for r in live_eval.summarise(cases, results, live=True)}
+        assert rates["schema_valid"].n == 1, "the throttled brief must be excluded"
+        assert rates["schema_valid"].point == 1.0
+        assert rates["provider_answered"].successes == 1
+        assert rates["provider_answered"].n == 2

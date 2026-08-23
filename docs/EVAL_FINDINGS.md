@@ -165,3 +165,102 @@ cd backend && python -m eval.live_eval --offline --update-baseline
 The baseline now records 100% across all three routing rates, so the gate
 protects the fixed state. Raising it should stay a visible commit: its job is to
 stop things getting worse, not to assert that they are good.
+
+
+---
+
+# The first live run
+
+Routing was scored before any API call. This section is what the model half
+found once it ran for real, against `openai/gpt-oss-120b`.
+
+| Metric | Rate | 95% CI | n |
+|---|---:|---|---:|
+| `schema_valid` | 97% | 84–99% | 32 |
+| `grounded` | 100% | 89–100% | 31 |
+| `gate_pass_first_try` | 75% | 58–87% | 32 |
+| `repair_recovery` | 86% | 49–97% | 7 |
+| `constraint_targeting` | 71% | 53–85% | 28 |
+| `prose_free_of_numeric_claims` | 0% | 0–11% | 31 |
+| `provider_answered` | 78% | 63–88% | 41 |
+
+`grounded` at 100% is the headline worth keeping: across every formula the
+model produced, not one ingredient fell outside the governed library. The
+library-constrained prompt does its job, so nothing unverifiable ever reached
+the composition step.
+
+## F-P1 — Production was down, and /health said ok
+
+**Severity: critical. Found by the eval's first live run.**
+
+Groq retired `llama-3.3-70b-versatile`. Every generation request returned 404
+`model_not_found`. Confirmed against production:
+
+```
+data: {"type": "error", "message": "The formulation agent encountered an
+       error (NotFoundError). Please try again."}
+```
+
+Three things kept it invisible:
+
+1. **`/health` reported `"status":"ok"`** with `"chat model initialized"`. The
+   probes take no network call by design — a live call per probe would bill
+   every uptime check and couple liveness to a third party. The cost of that
+   correct decision is that "a client was constructed" and "the model still
+   exists" are different questions, and only the first was asked.
+2. **The fallback chain could not help.** `llama-3.1-8b-instant` was retired in
+   the same sweep. A primary and a fallback from one family retire together.
+3. **208 tests and a green CI never saw it**, because every test mocks the LLM.
+   That is the exact gap this harness was built for, named in its own docstring
+   before it turned out to be real.
+
+**Fixed:** defaults moved to `openai/gpt-oss-120b` / `openai/gpt-oss-20b` —
+deliberately from different families — and `verify_model_available` now checks
+the configured id against the account's model list once at startup, caching the
+verdict for the probe. A definitive absence fails readiness; a failure to check
+reports `unverified` and leaves a working instance in rotation.
+
+## F-E5 — The numeric-claim flag fires on every formula
+
+**Severity: medium. A safety signal that always fires is off.**
+
+`prose_free_of_numeric_claims` scored 0/31. That is the detector, not the model.
+
+The pattern matches any number followed by a letter, so it catches processing
+parameters:
+
+```
+"Age the mix for 4 hours at 4C"      -> flagged
+"Pasteurize at 82C for 25 seconds"   -> flagged
+"Draw at -6C; harden at -18C"        -> flagged
+"Provides roughly 200 mg calcium"    -> flagged   (correct)
+```
+
+Only the last is an unverified nutrition claim. The first three are exactly
+what the prompt asks notes to contain: *"processing, texture, or regulatory
+considerations."* So the UI marks every single formula as carrying unverified
+numbers, and a warning that never varies is a warning nobody reads.
+
+Not fixed — this changes user-visible behaviour and deserves a deliberate call.
+The shape of a fix is to distinguish a nutrient claim (a quantity in a unit the
+domain computes: mg, g, kcal, per serving) from a process parameter (time,
+temperature, rpm), rather than treating every digit as suspect.
+
+## Corrections to the harness itself
+
+Three defects in my own code, each found by using it:
+
+- **Rate limits were scored as model failures.** Nine of ten apparent schema
+  failures were 429s from the free tier's token ceiling. Uncorrected, the run
+  reported 76% schema validity and 60% first-pass gate; excluding provider
+  refusals gives 97% and 75%. `classify_error` now separates infrastructure
+  from quality, and the throttled share is reported as its own rate.
+- **The report printed before the artifacts were written.** The first
+  successful live run completed, then died on a Windows cp1252
+  `UnicodeEncodeError` from a narrow no-break space in model prose, losing
+  every result. Files are now written first.
+- **The key check ran before `.env` loaded**, so a valid key looked missing.
+
+None of these would have surfaced without a real run. That is the argument for
+running an eval against production infrastructure rather than only against
+stubs.

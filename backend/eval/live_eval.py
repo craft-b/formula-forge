@@ -50,6 +50,27 @@ if str(BACKEND) not in sys.path:
 BRIEFS = HERE / "briefs.json"
 BASELINE = HERE / "baseline.json"
 
+#: Recorded in results when GROQ_MODEL is unset, so a run is never attributed to
+#: a model it did not use. Not a default to call — llm.py owns that.
+DEFAULT_MODEL_NOTE = "unset (llm.py default)"
+
+
+def _safe_print(text: str) -> None:
+    """Print a report that may contain characters the console cannot encode.
+
+    Windows consoles default to cp1252. Model-authored prose routinely carries
+    en dashes and non-breaking hyphens, so printing a live report can raise
+    UnicodeEncodeError on exactly the runs worth reading. The file artifacts are
+    always UTF-8 and complete; only the console view degrades.
+    """
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        encoding = sys.stdout.encoding or "ascii"
+        print(text.encode(encoding, "replace").decode(encoding, "replace"))
+        print(f"\n[some characters were not printable in {encoding}; "
+              f"the written report is complete and UTF-8]")
+
 
 # ── statistics ────────────────────────────────────────────────────────────────
 
@@ -119,11 +140,41 @@ class CaseResult:
     numeric_claim_in_prose: Optional[bool] = None
     violations: list[str] = field(default_factory=list)
     error: str = ""
+    #: "" | "infrastructure" | "quality". Infrastructure failures are excluded
+    #: from every quality rate — see classify_error.
+    error_kind: str = ""
     seconds: float = 0.0
 
 
 def load_cases() -> list[dict]:
     return json.loads(BRIEFS.read_text(encoding="utf-8"))["cases"]
+
+
+#: Exceptions that say nothing about the model's output. A 429 is the provider
+#: declining to answer; scoring it as a schema failure blames the model for the
+#: free tier's token-per-minute ceiling.
+_INFRASTRUCTURE_ERRORS = (
+    "ratelimit", "rate_limit", "timeout", "connection", "apiconnection",
+    "internalserver", "serviceunavailable", "503", "502", "504",
+)
+
+
+def classify_error(error: str) -> str:
+    """"infrastructure" if the provider never answered, else "quality".
+
+    The first live run made this necessary rather than theoretical: nine of the
+    ten apparent schema failures were 429s from the free tier's TPM ceiling.
+    Counted as quality they put `schema_valid` at 76% when the model had in
+    fact produced valid JSON on 30 of the 31 briefs it was allowed to answer.
+    A nightly gate that fails whenever the tier throttles is a gate that gets
+    switched off.
+    """
+    if not error:
+        return ""
+    lowered = error.lower()
+    return ("infrastructure"
+            if any(token in lowered for token in _INFRASTRUCTURE_ERRORS)
+            else "quality")
 
 
 # ── scoring ───────────────────────────────────────────────────────────────────
@@ -195,6 +246,7 @@ def score_generation(cases: list[dict], results: list[CaseResult],
                     and retry.validation.passed)
         except Exception as exc:  # noqa: BLE001 - a live run must not abort mid-set
             result.error = f"{type(exc).__name__}: {exc}"
+            result.error_kind = classify_error(result.error)
         finally:
             result.seconds = round(time.time() - started, 2)
 
@@ -229,7 +281,16 @@ def summarise(cases: list[dict], results: list[CaseResult], live: bool) -> list[
     if not live:
         return rates
 
-    attempted = [r for r in results if by_id[r.id]["expect_gate_pass"] is not None]
+    # A brief the provider refused to answer tells us nothing about the model,
+    # so it is reported separately and excluded from every quality rate below.
+    all_attempted = [r for r in results if by_id[r.id]["expect_gate_pass"] is not None]
+    throttled = [r for r in all_attempted if r.error_kind == "infrastructure"]
+    attempted = [r for r in all_attempted if r.error_kind != "infrastructure"]
+    if throttled:
+        rates.append(Rate(
+            "provider_answered", len(attempted), len(all_attempted),
+            "briefs the provider actually answered (429s and timeouts excluded "
+            "from every rate below)"))
     generated = [r for r in attempted if r.generated]
     rates += [
         Rate("schema_valid", sum(bool(r.generated) for r in attempted), len(attempted),
@@ -310,6 +371,8 @@ def render(rates: list[Rate], results: list[CaseResult], live: bool) -> str:
                     "| Case | Issue | Violations |", "|---|---|---|"]
             for r in problems:
                 issue = r.error or ("gate failed" if r.gate_passed_first is False else "")
+                if r.error_kind == "infrastructure":
+                    issue = f"[provider] {issue.split(':')[0]}"
                 recovered = " (repaired)" if r.gate_passed_after_repair else ""
                 out.append(f"| `{r.id}` | {issue}{recovered} "
                            f"| {', '.join(r.violations) or '—'} |")
@@ -376,9 +439,18 @@ def main() -> int:
             return 1
 
     live = not args.offline
-    if live and not os.getenv("GROQ_API_KEY"):
-        print("GROQ_API_KEY is not set. Use --offline to score routing only.")
-        return 1
+    if live:
+        # Importing config is what loads .env — it is the single load point
+        # (audit finding F15), and main.py imports it before graph for the same
+        # reason. Checking os.environ first told anyone with a perfectly good
+        # backend/.env that their key was missing.
+        import config  # noqa: F401
+
+        if not os.getenv("GROQ_API_KEY"):
+            print("GROQ_API_KEY is not set, and backend/.env did not supply it.\n"
+                  "Copy backend/.env.example to backend/.env and fill it in, or "
+                  "use --offline to score routing only.")
+            return 1
 
     results = score_routing(cases)
     if live:
@@ -386,21 +458,26 @@ def main() -> int:
 
     rates = summarise(cases, results, live)
     report = render(rates, results, live)
-    print(report)
 
-    if args.markdown:
-        args.markdown.write_text(report + "\n", encoding="utf-8")
-
+    # Persist before printing. A live run costs real API calls and minutes, and
+    # stdout is the one step that can fail for reasons having nothing to do with
+    # the eval — a Windows console is cp1252, and one non-breaking hyphen in a
+    # model-authored product name is enough to raise UnicodeEncodeError and
+    # take the entire run's results with it. Ask how this was found.
     payload = {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "mode": "live" if live else "offline",
-        "model": os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile") if live else None,
+        "model": os.getenv("GROQ_MODEL", DEFAULT_MODEL_NOTE) if live else None,
         "n_cases": len(cases),
         "rates": {r.name: r.as_dict() for r in rates},
         "cases": [asdict(r) for r in results],
     }
     if args.json:
         args.json.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    if args.markdown:
+        args.markdown.write_text(report + "\n", encoding="utf-8")
+
+    _safe_print(report)
 
     if args.update_baseline:
         BASELINE.write_text(json.dumps(

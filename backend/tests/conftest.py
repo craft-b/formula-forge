@@ -16,3 +16,8 @@ os.environ.setdefault("GROQ_MODEL", "llama-3.3-70b-versatile")
 os.environ.setdefault("CHAT_RATE_LIMIT", "100000/minute")
 os.environ.setdefault("GLOBAL_DAILY_TOKENS", "100000000")
 os.environ.setdefault("SESSION_DAILY_TOKENS", "10000000")
+
+# The startup model check makes a network call to list Groq models. It runs on
+# every app fixture, so leaving it on made the suite depend on Groq being
+# reachable and tripled its runtime. verify_model_available is tested directly.
+os.environ.setdefault("VERIFY_MODEL_ON_STARTUP", "false")
