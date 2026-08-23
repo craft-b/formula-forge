@@ -28,6 +28,8 @@ from graph import (
     regenerate_formula,
 )
 from domain import CandidateFormula, validate_candidate
+from generation import candidate_from_llm as _candidate_from_llm
+from generation import parse_and_validate as _parse_and_validate
 from json_utils import extract_json_block
 from budget import TokenBudget, estimate_tokens
 from observability import new_request_id, request_id_var, setup_logging
@@ -55,49 +57,6 @@ limiter = Limiter(key_func=get_remote_address)
 
 def _chat_rate_limit(*args, **kwargs) -> str:
     return CHAT_RATE_LIMIT
-
-
-def _candidate_from_llm(raw: dict) -> CandidateFormula:
-    """Adapt a raw LLM formula dict to a CandidateFormula (structure only).
-
-    Any nutrition the LLM supplied is intentionally ignored — the domain layer
-    computes all nutrition from the governed ingredient library. `overrun_pct`
-    is dropped for the same reason: it divides every per-serving value, so
-    letting the model set it would hand it control of the numbers the clinical
-    rulesets are checked against.
-    """
-    ingredients = []
-    for item in raw.get("ingredients", []):
-        ingredients.append({
-            "ref": item.get("ref") or item.get("name") or "",
-            "percentage": item.get("percentage", 0),
-            "notes": item.get("notes", ""),
-        })
-    return CandidateFormula(
-        product_name=raw.get("product_name") or "Formula",
-        description=raw.get("description", ""),
-        product_format=raw.get("product_format") or "standard",
-        ingredients=ingredients,
-        formulation_notes=raw.get("formulation_notes", ""),
-    )
-
-
-def _parse_and_validate(raw_text: str, active_modules: Optional[list],
-                        product_format: Optional[str] = None):
-    """Parse raw LLM text and run it through the domain gate. None on parse failure.
-
-    An explicit `product_format` (user's brief-builder selection) overrides the
-    LLM's guess — serving/overrun math then reflects what the user chose.
-    """
-    try:
-        raw = json.loads(extract_json_block(raw_text))
-        candidate = _candidate_from_llm(raw)
-        if product_format:
-            candidate.product_format = product_format
-        return validate_candidate(candidate, active_modules=active_modules or [])
-    except (json.JSONDecodeError, ValueError) as exc:
-        logger.warning("Formula parse/validation setup failed: %s", exc)
-        return None
 
 
 def _repair_feedback(result) -> str:

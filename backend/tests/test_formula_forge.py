@@ -234,3 +234,75 @@ class TestApiEndpoints:
         events = parse_sse(response.text)
         error_events = [e for e in events if e.get("type") == "error"]
         assert len(error_events) == 1
+
+
+# ── Routing regressions found by the live eval ────────────────────────────────
+
+class TestEvalFindingRegressions:
+    """One test per finding in docs/EVAL_FINDINGS.md.
+
+    The live eval scores these in aggregate; these pin the specific inputs so a
+    future pattern edit that reintroduces one fails loudly and by name.
+    """
+
+    @pytest.mark.parametrize("message", [
+        "Build me a frozen dessert for hemodialysis patients",
+        "Create a chocolate ice cream",
+        "Develop a novelty frozen dessert for a kids menu",
+        "We need a protein-fortified dessert for elderly patients",
+        "Create an IDDSI level 4 texture-modified dessert",
+        "renal formula",
+        "vegan formula please",
+    ])
+    def test_fe1_product_nouns_route_to_generation(self, message):
+        """F-E1: the pattern did not recognise 'dessert' or 'ice cream'."""
+        assert detect_intent(message) == "formulate"
+
+    @pytest.mark.parametrize("message", [
+        "How much potassium is in coconut cream",
+        "make me something",
+        "Tell me about renal diet restrictions",
+        "What is IDDSI?",
+    ])
+    def test_fe1_did_not_make_everything_formulate(self, message):
+        """Widening the nouns must not swallow ordinary questions."""
+        assert detect_intent(message) == "search"
+
+    def test_fe2_an_ingredient_name_does_not_impose_a_clinical_ceiling(self):
+        """F-E2: 'nonfat dry milk' activated the low-fat ruleset."""
+        from graph import detect_modules
+
+        assert detect_modules("Formulate a renal dessert with nonfat dry milk") == ["renal"]
+        assert detect_modules("A dessert using non-fat dry milk") == []
+
+    def test_fe2_the_dietary_sense_still_fires(self):
+        from graph import detect_modules
+
+        assert "low_fat" in detect_modules("a non-fat frozen dessert")
+        assert "low_fat" in detect_modules("a low-fat dessert")
+
+    @pytest.mark.parametrize("message,module", [
+        ("hemodialysis patients", "renal"),
+        ("haemodialysis ward", "renal"),
+        ("peritoneal dialysis", "renal"),
+        ("prediabetic residents", "diabetic"),
+        ("a diabetic dessert", "diabetic"),
+    ])
+    def test_fe3_clinical_stems_are_not_lost_to_word_boundaries(self, message, module):
+        """F-E3: the silent one. A missed module means no ruleset runs at all."""
+        from graph import detect_modules
+
+        assert module in detect_modules(message), f"{message!r} lost {module}"
+
+    @pytest.mark.parametrize("message,module", [
+        ("Create a formula appropriate for a nephrology ward", "renal"),
+        ("a dessert for ESRD patients", "renal"),
+        ("Design a dessert that will not spike blood glucose", "diabetic"),
+        ("something with a low glycaemic index", "diabetic"),
+        ("at least 25 g protein per serving", "high_protein"),
+    ])
+    def test_fe4_clinical_vocabulary_is_recognised(self, message, module):
+        """F-E4: unambiguous clinical intent that matched nothing."""
+        from graph import detect_modules
+
+        assert module in detect_modules(message), f"{message!r} lost {module}"

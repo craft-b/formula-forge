@@ -385,6 +385,47 @@ runs in CI without an API key. Coverage by area:
   run through the validator with no LLM involved. CI fails if schema validity or compliance
   accuracy drops below 100%, or if the case set shrinks below 15.
 
+### Evaluating the model, not just the math
+
+`test_golden_eval.py` guards the deterministic half. The other half of this system is a
+language model, and every test above mocks it — so a prompt edit, a temperature change or a
+Groq model deprecation could degrade generation badly while CI stayed green.
+
+`eval/live_eval.py` closes that, in two modes.
+
+**Offline** scores the deterministic routing layer against 46 labelled briefs — does this
+brief reach the right agent, and does it activate the right constraint rulesets. No API key,
+no cost, no nondeterminism, so it runs on every pull request and gates against a recorded
+baseline. It is also the more safety-critical half: a renal brief that fails to activate the
+renal ruleset produces a formula that was never checked against it, and nothing downstream
+notices.
+
+```bash
+cd backend && python -m eval.live_eval --offline
+```
+
+**Live** additionally runs real generation through `generation.parse_and_validate` — the
+same path the API uses, deliberately, since an eval that reimplements the pipeline measures
+one that is not shipping — and scores schema validity, grounding in the governed library,
+first-pass gate rate, repair recovery, constraint targeting, and whether model prose asserts
+quantities the system never computed. It costs money and varies between runs, so it runs
+nightly rather than per-PR (`.github/workflows/llm-eval.yml`).
+
+```bash
+cd backend && python -m eval.live_eval --json results.json --gate
+```
+
+Every rate carries a Wilson 95% interval, and the gate asks whether the run dropped below
+the interval the baseline recorded rather than below the baseline number. The distinction is
+what keeps the gate alive: with a baseline of 46/46, the stricter comparison fails on the
+very next run that scores 45/46, and a gate that cries wolf gets switched off within a week.
+
+The briefs are labelled in `eval/briefs.json` and cover each ruleset alone and in
+combination, natural operator phrasing, deliberate contradictions ("a vegan ice cream using
+heavy cream"), unsatisfiable requests, prompt injection, and terse or rambling input. The
+current baseline is in `eval/baseline.json`; see `docs/EVAL_FINDINGS.md` for what the first
+run surfaced.
+
 ## What is deliberately not built yet
 
 **Authentication.** `/api/chat` is open. The rate limit and token budget bound the damage,

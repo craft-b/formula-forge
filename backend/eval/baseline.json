@@ -1,0 +1,35 @@
+{
+  "generated_at": "2026-08-23T17:25:33Z",
+  "mode": "offline",
+  "model": null,
+  "n_cases": 46,
+  "rates": {
+    "intent_routing": {
+      "name": "intent_routing",
+      "successes": 46,
+      "n": 46,
+      "point": 1.0,
+      "ci_low": 0.9229,
+      "ci_high": 1.0,
+      "note": "brief routed to the right agent"
+    },
+    "module_detection": {
+      "name": "module_detection",
+      "successes": 46,
+      "n": 46,
+      "point": 1.0,
+      "ci_low": 0.9229,
+      "ci_high": 1.0,
+      "note": "constraint rulesets activated exactly as labelled"
+    },
+    "module_detection_constrained": {
+      "name": "module_detection_constrained",
+      "successes": 37,
+      "n": 37,
+      "point": 1.0,
+      "ci_low": 0.9059,
+      "ci_high": 1.0,
+      "note": "same, restricted to briefs that carry a clinical constraint"
+    }
+  }
+}

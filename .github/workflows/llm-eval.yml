@@ -1,0 +1,81 @@
+name: LLM eval (nightly)
+
+# The deterministic half of the eval runs in PR CI (`--offline`, no key, free).
+# This is the half that calls a real model: it costs money and its result moves
+# run to run, which is exactly why it does not belong on the PR path. A
+# nondeterministic gate on every pull request teaches people to re-run CI until
+# it goes green, and a gate nobody believes is worse than no gate.
+#
+# Nightly instead: one scheduled run against the live model, gated on whether
+# any rate has dropped below the interval the baseline recorded. Results are
+# uploaded so a regression can be read case by case rather than guessed at.
+
+on:
+  schedule:
+    - cron: "0 7 * * *"   # 07:00 UTC daily
+  workflow_dispatch:
+    inputs:
+      update_baseline:
+        description: "Record this run as the new baseline (after a deliberate improvement)"
+        type: boolean
+        default: false
+
+jobs:
+  live-eval:
+    runs-on: ubuntu-latest
+    # A missing key would otherwise fail every night on a fork or after a
+    # secret rotation, and a workflow that is always red gets ignored.
+    if: github.repository_owner != ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        working-directory: backend
+        run: pip install -r requirements-dev.txt
+
+      - name: Run the live eval
+        working-directory: backend
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          LLM_PROVIDER: groq
+          GROQ_MODEL: llama-3.3-70b-versatile
+          # One model, no silent fallback: a run that quietly degrades to the
+          # 8b model would report that model's quality under the 70b's name.
+          ENABLE_LLM_FALLBACK: "false"
+        run: |
+          python -m eval.live_eval \
+            --json eval-results.json \
+            --markdown eval-report.md \
+            --gate
+
+      - name: Publish the report to the job summary
+        if: always()
+        working-directory: backend
+        run: cat eval-report.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm-eval-${{ github.run_number }}
+          path: |
+            backend/eval-results.json
+            backend/eval-report.md
+          retention-days: 30
+
+      - name: Update the baseline
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_baseline }}
+        working-directory: backend
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          python -m eval.live_eval --update-baseline
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add eval/baseline.json
+          git commit -m "Record a new LLM eval baseline" || echo "baseline unchanged"
+          git push
