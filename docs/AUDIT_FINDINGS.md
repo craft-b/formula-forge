@@ -1,5 +1,17 @@
 # FormulaForge — Codebase Audit Findings (Stage 1, Static)
 
+> **Status: historical — all findings below are fixed.**
+> This document describes the codebase as it stood on **2026-07-01**, before the
+> remediation work. It is kept as the record of what was found and what changed,
+> not as a description of the current system.
+>
+> Every P0 and P1 finding was resolved in commits `7780285`…`6197a02` (A1–A9):
+> the dataset was rebuilt from USDA FDC with full nutrient vectors (F1, F3), a
+> mandatory deterministic validation gate was added so no model-produced number
+> reaches a user (F2), and the endpoint was given a CORS allowlist, rate limiting
+> and a token budget (F4). For the system as it exists now, see the
+> [README](../README.md).
+
 **Auditor stance:** Senior forward-deployed engineer; 20+ yr frozen-dessert CPG R&D + production ML.
 **Method:** Single static pass, read from disk 2026-07-01. **Stage 2 executed same day:** pinned deps installed into `backend/venv`, baseline suite green (31/31), and 7 targeted confirmation tests written and run — **all P0/P1 execution-confirm items CONFIRMED** (results in the queue table at the bottom). Temp test file removed after the run.
 **Scope read:** `backend/` (main.py, graph.py, llm.py, tests/, requirements*, deploy files), `frontend/` (App.tsx, main.tsx, index.css, configs), `usda_foods.json` (structural inspection), `.github/workflows/ci.yml`, `README.md`.

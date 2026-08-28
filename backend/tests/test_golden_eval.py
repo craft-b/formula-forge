@@ -8,8 +8,8 @@ no LLM, so it is deterministic in CI. Asserts, in aggregate and per case:
     fire on the expected constraint module)
 
 This guards the riskiest surface — the domain math and constraint rulesets —
-against regression. It does NOT measure LLM generation quality, which needs a
-live eval harness (spec §3.4, Phase B).
+against regression. It does NOT measure LLM generation quality; that is what
+eval/live_eval.py does.
 """
 from __future__ import annotations
 
