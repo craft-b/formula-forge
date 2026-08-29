@@ -457,6 +457,54 @@ heavy cream"), unsatisfiable requests, prompt injection, and terse or rambling i
 current baseline is in `eval/baseline.json`; see `docs/EVAL_FINDINGS.md` for what the first
 run surfaced.
 
+## What it comes to
+
+The system as it stands, measured rather than asserted:
+
+| | |
+|---|---|
+| Governed ingredient library | 34 ingredients, dataset `2026.07.0`, every row with a full nutrient vector and provenance |
+| Model-authored numbers reaching a user | 0, enforced by type and pinned by test |
+| Domain + gate test suite | 231 tests, no live LLM, deterministic in CI |
+| Golden compliance set | 18 brief-to-formula cases, 100% schema-valid, 100% compliance accuracy |
+| Routing eval | 46 labelled briefs, 100% intent routing, 100% ruleset activation |
+| Repairs per request | at most 1, structurally — `_resolve_formula()` has no loop |
+
+None of that says the formulas are good. It says every number attached to one was computed
+from a governed source, that the arithmetic is checked, and that a failure is reported as a
+failure. The thing this project is actually a claim about is the boundary, not the recipes:
+a language model proposes structure, and nothing it asserts about quantity survives contact
+with the domain layer. That property is the deliverable, and it is the one thing here that
+is tested rather than argued.
+
+## What building it taught me
+
+**The deterministic half was the dangerous half.** The eval was built to catch the language
+model drifting. On its first run, before it made a single API call, it found four defects —
+all of them in the regex routing layer. `_FORMULATION_RE` did not recognise "dessert" or
+"ice cream", the two things this application makes, so ten of 46 briefs reached the Q&A
+agent instead of the formulator. A renal brief that fails to activate the renal ruleset
+produces a formula that was never checked against it, and nothing downstream notices. I had
+spent the effort guarding the stochastic component and left the boring, safety-critical one
+untested.
+
+**Every failure I have had here was silent.** Groq's JSON mode emits no
+`on_chat_model_stream` events, so formula runs ended with no output at all rather than an
+error. The routing gaps produced confident answers to the wrong question. CI went red for
+eight weeks while the deployed site kept building: a lockfile generated on Windows recorded
+only the Windows builds of two native packages, which the host's install step tolerated and
+`npm ci` on Linux did not. A green deployment is not evidence of a green build, and I had
+been reading one as the other. The pattern is consistent enough to be a design
+rule now: make the failure loud, or you will not learn about it from the system.
+
+**Documentation drifts faster than you expect, and it drifts in your favour.** The
+"deliberately not built" list above named the generation-quality eval as the highest-value
+missing piece for some weeks after that eval was built and running in CI, forty lines
+further up the same file. `docs/AUDIT_FINDINGS.md` sat in the repository describing, in the
+present tense, a version of the product that three months of commits had already replaced.
+Nobody writes those on purpose; they are what a document does when the code moves and the
+prose does not.
+
 ## What is deliberately not built yet
 
 **Authentication.** `/api/chat` is open. The rate limit and token budget bound the damage,
