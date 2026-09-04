@@ -306,3 +306,97 @@ class TestEvalFindingRegressions:
         from graph import detect_modules
 
         assert module in detect_modules(message), f"{message!r} lost {module}"
+
+
+class TestRouterAndRagAgent:
+    """The router decides whether the clinical rulesets ever get a chance to run.
+
+    It was uncovered until now, which is uncomfortable given the four routing
+    defects the eval found (F-E1..F-E4). Those all lived in `detect_intent` and
+    `detect_modules`; this covers the layer above them, which chooses whether
+    to consult them at all. A brief that reaches `rag_agent` is answered as
+    chat and never validated against anything.
+    """
+
+    @staticmethod
+    def _state(text, **extra):
+        from langchain_core.messages import HumanMessage
+        return {"messages": [HumanMessage(content=text)], **extra}
+
+    def test_an_explicit_intent_beats_the_text(self):
+        """The brief-builder sets intent directly; the regex must not override.
+
+        This is the mitigation that kept F-E1 out of the primary UI path, so it
+        deserves a test of its own rather than being assumed.
+        """
+        import graph
+        state = self._state("what is maltodextrin", intent="formulate")
+        assert graph.route(state) == "formula_agent"
+
+    def test_a_formulation_brief_without_explicit_intent_routes_to_the_agent(self):
+        import graph
+        assert graph.route(self._state(
+            "Formulate a vegan frozen dessert")) == "formula_agent"
+
+    def test_a_question_routes_to_chat(self):
+        import graph
+        assert graph.route(self._state(
+            "what does locust bean gum do")) == "rag_agent"
+
+    def test_no_human_message_falls_back_to_chat(self):
+        """Defensive: an empty turn must not be treated as a formulation."""
+        import graph
+        assert graph.route({"messages": []}) == "rag_agent"
+
+    def test_clinical_phrasing_reaches_the_formula_agent(self):
+        """The F-E3 regression, asserted at the routing layer rather than the
+        pattern layer: hemodialysis must not be answered as chat."""
+        import graph
+        assert graph.route(self._state(
+            "Build me a frozen dessert for hemodialysis patients")) == "formula_agent"
+
+
+class TestRagAgentGrounding:
+    def test_the_chat_agent_is_given_usda_context_and_history(self, monkeypatch):
+        """The Q&A path must ground answers in the dataset, not free-associate."""
+        import graph
+        from langchain_core.messages import HumanMessage
+
+        captured = {}
+
+        class _Stub:
+            def invoke(self, messages):
+                captured["messages"] = messages
+                return type("R", (), {"content": "Maltodextrin is a bulking agent."})()
+
+        monkeypatch.setattr(graph, "llm", _Stub())
+        monkeypatch.setattr(graph, "search_foods", lambda q: ["MALTODEXTRIN, 380 kcal"])
+
+        out = graph.rag_agent(self_state := {"messages": [HumanMessage(content="what is maltodextrin")]})
+
+        system_text = " ".join(
+            m.content for m in captured["messages"] if hasattr(m, "content"))
+        assert "MALTODEXTRIN, 380 kcal" in system_text, "USDA context was not supplied"
+        assert "FormulaForge" in system_text, "system prompt missing"
+        # Without this the model answers with no idea what was asked; a mutation
+        # that dropped conversation history passed until it was added.
+        assert "what is maltodextrin" in system_text, "user turn was not forwarded"
+        assert out["messages"][-1].content == "Maltodextrin is a bulking agent."
+
+    def test_an_empty_dataset_hit_says_so_rather_than_inventing(self, monkeypatch):
+        import graph
+        from langchain_core.messages import HumanMessage
+
+        captured = {}
+
+        class _Stub:
+            def invoke(self, messages):
+                captured["messages"] = messages
+                return type("R", (), {"content": "I don't have that."})()
+
+        monkeypatch.setattr(graph, "llm", _Stub())
+        monkeypatch.setattr(graph, "search_foods", lambda q: [])
+
+        graph.rag_agent({"messages": [HumanMessage(content="what is unobtainium")]})
+        text = " ".join(m.content for m in captured["messages"] if hasattr(m, "content"))
+        assert "No matching foods found" in text
