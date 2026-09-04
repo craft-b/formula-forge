@@ -46,6 +46,14 @@ jobs:
             || (echo "::error::frontend/src/types/api.ts is stale — run 'python -m scripts.gen_frontend_types'" && exit 1)
 
   frontend:
+    # `npm ci` installs strictly from package-lock.json, which makes the lockfile
+    # responsible for listing a native binary for THIS platform. npm records only
+    # the variants it resolved on the machine that generated it, so a lockfile
+    # written on Windows can carry lightningcss-win32-x64-msvc and no Linux
+    # equivalent - and this job then installs no binary at all and fails on a
+    # module it cannot find. Both packages are pinned as optionalDependencies in
+    # frontend/package.json to force the Linux entries into the lockfile; keep
+    # their versions in step with lightningcss and rolldown when either bumps.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
