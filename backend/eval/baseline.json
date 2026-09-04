@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-08-23T17:25:33Z",
-  "mode": "offline",
-  "model": null,
+  "generated_at": "2026-09-04T22:32:39Z",
+  "mode": "live",
+  "model": "openai/gpt-oss-120b",
   "n_cases": 46,
   "rates": {
     "intent_routing": {
@@ -30,6 +30,78 @@
       "ci_low": 0.9059,
       "ci_high": 1.0,
       "note": "same, restricted to briefs that carry a clinical constraint"
+    },
+    "provider_answered": {
+      "name": "provider_answered",
+      "successes": 39,
+      "n": 41,
+      "point": 0.9512,
+      "ci_low": 0.8386,
+      "ci_high": 0.9865,
+      "note": "briefs the provider actually answered (429s and timeouts excluded from every rate below)"
+    },
+    "schema_valid": {
+      "name": "schema_valid",
+      "successes": 37,
+      "n": 39,
+      "point": 0.9487,
+      "ci_low": 0.8311,
+      "ci_high": 0.9858,
+      "note": "model output parsed into a candidate"
+    },
+    "grounded": {
+      "name": "grounded",
+      "successes": 37,
+      "n": 37,
+      "point": 1.0,
+      "ci_low": 0.9059,
+      "ci_high": 1.0,
+      "note": "every ingredient resolved to the governed library"
+    },
+    "gate_pass_first_try": {
+      "name": "gate_pass_first_try",
+      "successes": 29,
+      "n": 38,
+      "point": 0.7632,
+      "ci_low": 0.6079,
+      "ci_high": 0.8701,
+      "note": "cleared validation with no repair"
+    },
+    "repair_recovery": {
+      "name": "repair_recovery",
+      "successes": 6,
+      "n": 7,
+      "point": 0.8571,
+      "ci_low": 0.4869,
+      "ci_high": 0.9743,
+      "note": "of those that failed, recovered in one repair"
+    },
+    "constraint_targeting": {
+      "name": "constraint_targeting",
+      "successes": 24,
+      "n": 33,
+      "point": 0.7273,
+      "ci_low": 0.5578,
+      "ci_high": 0.8493,
+      "note": "designed to the limits rather than being rescued by the gate"
+    },
+    "prose_free_of_numeric_claims": {
+      "name": "prose_free_of_numeric_claims",
+      "successes": 0,
+      "n": 37,
+      "point": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.0941,
+      "note": "notes assert no quantity the system did not compute"
+    },
+    "unsatisfiable_caught": {
+      "name": "unsatisfiable_caught",
+      "successes": 1,
+      "n": 1,
+      "point": 1.0,
+      "ci_low": 0.2065,
+      "ci_high": 1.0,
+      "note": "impossible briefs did not yield a passing formula"
     }
   }
 }

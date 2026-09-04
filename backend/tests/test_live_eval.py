@@ -420,3 +420,95 @@ class TestSampling:
         categories = {c["category"] for c in picked}
         assert "contradiction" in categories
         assert "off_domain" in categories
+
+
+class TestMalformedModelShapes:
+    """The model's JSON shape is a convention, not a guarantee.
+
+    A live run produced ingredients as a bare list of names. `item.get` raised
+    AttributeError out through the request, so a request that should have been
+    repaired became an error the user saw. `parse_and_validate` advertises
+    "None on parse failure" and the repair path depends on that; every shape
+    below must take that route rather than raising.
+    """
+
+    @staticmethod
+    def _text(payload):
+        return json.dumps(payload)
+
+    def test_ingredients_as_bare_strings_do_not_crash(self):
+        """The exact shape from the live run."""
+        from generation import parse_and_validate
+        out = parse_and_validate(self._text({
+            "type": "formula", "product_name": "Renal",
+            "product_format": "standard",
+            "ingredients": ["skim milk", "sucrose", "cream"],
+            "formulation_notes": "",
+        }), [])
+        # Rejected or None, but never an exception.
+        assert out is None or type(out).__name__ == "RejectedFormula"
+
+    def test_the_adapter_itself_survives_non_object_ingredients(self):
+        """Tested directly, not through parse_and_validate.
+
+        parse_and_validate also catches AttributeError, so going through it
+        cannot tell whether the adapter is safe or merely wrapped in a net.
+        Both defences are wanted; this one pins the adapter.
+        """
+        from generation import candidate_from_llm
+        cand = candidate_from_llm({
+            "product_name": "X", "product_format": "standard",
+            "ingredients": ["a bare name", {"ref": "sucrose", "percentage": 100}],
+        })
+        # pydantic coerces to FormulaIngredient; the bare string is gone.
+        assert [i.ref for i in cand.ingredients] == ["sucrose"]
+
+    def test_the_outer_net_catches_shapes_the_adapter_does_not_expect(self):
+        """The second defence, pinned separately: any unanticipated shape must
+        become a parse failure rather than an exception reaching the caller."""
+        from generation import parse_and_validate
+        import generation
+
+        def _boom(raw):
+            raise AttributeError("some shape nobody predicted")
+
+        original = generation.candidate_from_llm
+        generation.candidate_from_llm = _boom
+        try:
+            assert parse_and_validate('{"ingredients": []}', []) is None
+        finally:
+            generation.candidate_from_llm = original
+
+    def test_named_but_unquantified_ingredients_are_dropped_not_guessed(self):
+        """A name with no percentage cannot become a formula, and must not be
+        invented into one. The schema requires percentage > 0, so the candidate
+        fails to construct and the caller sees a parse failure - never a
+        formula whose composition this layer made up."""
+        from generation import parse_and_validate
+        assert parse_and_validate(
+            json.dumps({"type": "formula", "product_format": "standard",
+                        "ingredients": ["coconut cream", "sucrose"]}), []) is None
+
+    @pytest.mark.parametrize("payload", [
+        {"ingredients": [1, 2, 3]},
+        {"ingredients": [None]},
+        {"ingredients": [["nested"]]},
+        {"ingredients": "not a list"},
+        {"ingredients": None},
+        {},
+    ])
+    def test_other_malformed_ingredient_shapes_do_not_crash(self, payload):
+        from generation import parse_and_validate
+        payload = {"type": "formula", "product_format": "standard", **payload}
+        out = parse_and_validate(self._text(payload), [])
+        assert out is None or type(out).__name__ in {"RejectedFormula", "ValidatedFormula"}
+
+    @pytest.mark.parametrize("raw", ['["a","b"]', '"just a string"', "42", "null"])
+    def test_a_non_object_response_is_a_parse_failure(self, raw):
+        """A JSON array is valid JSON and still not a formula."""
+        from generation import parse_and_validate
+        assert parse_and_validate(raw, []) is None
+
+    def test_unparseable_text_is_still_none(self):
+        from generation import parse_and_validate
+        assert parse_and_validate("I'm sorry, but I can't fulfill that request.", []) is None

@@ -32,7 +32,17 @@ def candidate_from_llm(raw: dict) -> CandidateFormula:
     rulesets are checked against.
     """
     ingredients = []
-    for item in raw.get("ingredients", []):
+    for item in raw.get("ingredients") or []:
+        # The model is free-running text generation, so this shape is a
+        # convention it usually follows, not a guarantee. A live run returned a
+        # bare list of ingredient names and `item.get` raised AttributeError
+        # straight out through the request. Non-objects are skipped rather than
+        # coerced: an entry with no percentage cannot satisfy the schema
+        # (percentage > 0) in any case, so the result is a candidate that fails
+        # validation and takes the repair path - which is the designed
+        # behaviour for a malformed proposal.
+        if not isinstance(item, dict):
+            continue
         ingredients.append({
             "ref": item.get("ref") or item.get("name") or "",
             "percentage": item.get("percentage", 0),
@@ -59,10 +69,18 @@ def parse_and_validate(
     """
     try:
         raw = json.loads(extract_json_block(raw_text))
+        if not isinstance(raw, dict):
+            logger.warning("Formula response was %s, not an object", type(raw).__name__)
+            return None
         candidate = candidate_from_llm(raw)
         if product_format:
             candidate.product_format = product_format
         return validate_candidate(candidate, active_modules=active_modules or [])
-    except (json.JSONDecodeError, ValueError) as exc:
-        logger.warning("Formula parse/validation setup failed: %s", exc)
+    except (json.JSONDecodeError, ValueError, AttributeError, TypeError, KeyError) as exc:
+        # Deliberately wider than JSON errors. The contract this function
+        # advertises is "None on parse failure", and the caller's repair path
+        # depends on it; a shape the adapter did not anticipate should take
+        # that route rather than surfacing as a 500 to the user.
+        logger.warning("Formula parse/validation setup failed: %s: %s",
+                       type(exc).__name__, exc)
         return None
