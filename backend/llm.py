@@ -28,9 +28,19 @@ DEFAULT_TEMPERATURE = 0.3
 #
 # The lesson is in the pairing, not the names: a primary and a fallback from the
 # same family retire together, so the fallback chain fell into the same hole.
-# These two are from different families for that reason, and both support the
-# JSON mode formula generation depends on. `verify_model_available` checks the
-# configured id at startup so the next retirement is loud.
+#
+# These two are ALSO the same family, and that is a known, accepted risk rather
+# than an oversight. The account's model list was checked: of 14 models, only
+# these two can do this job. qwen/qwen3.6-27b cannot hold JSON mode, and
+# qwen/qwen3.8-27b rejects a formulation prompt as too large on this tier; the
+# rest are speech, TTS, classifiers or agentic systems. So gpt-oss-120b/20b is
+# not the safest available pairing — it is the only working one.
+#
+# What actually mitigates the risk is therefore not diversity but detection:
+# `verify_model_available` checks the configured id at startup, so the next
+# retirement fails readiness loudly instead of hiding behind a green /health.
+# If a second family that can hold JSON mode at this prompt size becomes
+# available, the fallback should move to it.
 DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 DEFAULT_FALLBACK_MODEL = "openai/gpt-oss-20b"
 

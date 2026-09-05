@@ -41,3 +41,8 @@ venv/
 .claude/launch.json
 .vercel
 .env*
+
+# Coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
