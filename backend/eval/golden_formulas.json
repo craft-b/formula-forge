@@ -1,5 +1,5 @@
 {
-  "description": "Golden regression set for the domain validation + compliance engine. Each case is a curated (brief -> formula) pair with an expected outcome. Runs without an LLM so it is deterministic in CI; it guards the domain math and constraint rulesets against regression, not LLM generation quality (which needs a live eval harness, Phase B).",
+  "description": "Golden regression set for the domain validation + compliance engine. Each case is a curated (brief -> formula) pair with an expected outcome. Runs without an LLM so it is deterministic in CI; it guards the domain math and constraint rulesets against regression, not LLM generation quality — that is measured separately by eval/live_eval.py.",
   "cases": [
     {
       "id": "renal_scoopable_pass",

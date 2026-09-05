@@ -1,5 +1,7 @@
 # FormulaForge
 
+[![CI](https://github.com/craft-b/formula-forge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/craft-b/formula-forge/actions/workflows/ci.yml)
+
 FormulaForge generates frozen-dessert formulations for clinical and institutional
 nutrition — renal, diabetic, high-protein, low-fat, and vegan diets — and verifies every
 one of them before a user sees it. A language model proposes an ingredient structure;
@@ -9,7 +11,14 @@ checks the result against the active dietary rulesets. It is built for formulato
 product developers doing early-stage feasibility work, where the question is not "what
 could this look like" but "does this actually meet the constraint, and can you show me."
 
-[Live demo](https://formula-forge-chi.vercel.app)
+![The FormulaForge workspace: a renal-safe formulation with its computed composition, per-serving values and constraint verdicts](docs/workspace.png)
+
+[Live demo](https://formula-forge-chi.vercel.app) — try a brief like
+*"formulate a renal-safe vanilla ice cream"*.
+
+> The API is on Render's free tier and sleeps when idle, so the first request
+> after a quiet period takes about 45 seconds to cold-start. Subsequent ones
+> are immediate.
 
 > FormulaForge is a formulation-design tool for qualified professionals. It makes no
 > medical claims and is not a medical device. Dietary thresholds are configurable defaults
@@ -242,7 +251,7 @@ model id in use:
 {
   "status": "ok",
   "version": "1.0.0",
-  "model": "llama-3.3-70b-versatile",
+  "model": "openai/gpt-oss-120b",
   "dependencies": {
     "llm_client":         {"status": "ok", "detail": "API key configured; chat model initialized."},
     "agent_graph":        {"status": "ok", "detail": "Compiled LangGraph agent loaded."},
@@ -250,6 +259,13 @@ model id in use:
   }
 }
 ```
+
+That `model` field is the model this *process* is running, not the repository
+default. The hosted demo sets `GROQ_MODEL=openai/gpt-oss-120b`, which is also the
+model the weekly LLM eval measures — an eval that scored a different model than
+the one serving traffic would be reporting a number nobody is using. The code
+default, and what you get from `.env.example` unchanged, is
+`llama-3.3-70b-versatile`.
 
 The probe makes no network call to the LLM provider. Checking readiness by calling Groq
 would bill every uptime check and would take this instance out of rotation during a
@@ -274,6 +290,11 @@ never enters the response.
 | Hosting | Render (backend), Vercel (frontend) |
 
 ## Quickstart
+
+**Prerequisites.** Python **3.11** (pinned in `.python-version` and `runtime.txt`;
+3.12 also works), Node **20.19+ or 22.12+** (required by Vite 8), and a free Groq
+API key. Nothing else — the governed ingredient library is committed, and the test
+suite needs no key at all.
 
 ### Backend, locally
 
@@ -436,6 +457,54 @@ heavy cream"), unsatisfiable requests, prompt injection, and terse or rambling i
 current baseline is in `eval/baseline.json`; see `docs/EVAL_FINDINGS.md` for what the first
 run surfaced.
 
+## What it comes to
+
+The system as it stands, measured rather than asserted:
+
+| | |
+|---|---|
+| Governed ingredient library | 34 ingredients, dataset `2026.07.0`, every row with a full nutrient vector and provenance |
+| Model-authored numbers reaching a user | 0, enforced by type and pinned by test |
+| Domain + gate test suite | 231 tests, no live LLM, deterministic in CI |
+| Golden compliance set | 18 brief-to-formula cases, 100% schema-valid, 100% compliance accuracy |
+| Routing eval | 46 labelled briefs, 100% intent routing, 100% ruleset activation |
+| Repairs per request | at most 1, structurally — `_resolve_formula()` has no loop |
+
+None of that says the formulas are good. It says every number attached to one was computed
+from a governed source, that the arithmetic is checked, and that a failure is reported as a
+failure. The thing this project is actually a claim about is the boundary, not the recipes:
+a language model proposes structure, and nothing it asserts about quantity survives contact
+with the domain layer. That property is the deliverable, and it is the one thing here that
+is tested rather than argued.
+
+## What building it taught me
+
+**The deterministic half was the dangerous half.** The eval was built to catch the language
+model drifting. On its first run, before it made a single API call, it found four defects —
+all of them in the regex routing layer. `_FORMULATION_RE` did not recognise "dessert" or
+"ice cream", the two things this application makes, so ten of 46 briefs reached the Q&A
+agent instead of the formulator. A renal brief that fails to activate the renal ruleset
+produces a formula that was never checked against it, and nothing downstream notices. I had
+spent the effort guarding the stochastic component and left the boring, safety-critical one
+untested.
+
+**Every failure I have had here was silent.** Groq's JSON mode emits no
+`on_chat_model_stream` events, so formula runs ended with no output at all rather than an
+error. The routing gaps produced confident answers to the wrong question. CI went red for
+eight weeks while the deployed site kept building: a lockfile generated on Windows recorded
+only the Windows builds of two native packages, which the host's install step tolerated and
+`npm ci` on Linux did not. A green deployment is not evidence of a green build, and I had
+been reading one as the other. The pattern is consistent enough to be a design
+rule now: make the failure loud, or you will not learn about it from the system.
+
+**Documentation drifts faster than you expect, and it drifts in your favour.** The
+"deliberately not built" list above named the generation-quality eval as the highest-value
+missing piece for some weeks after that eval was built and running in CI, forty lines
+further up the same file. `docs/AUDIT_FINDINGS.md` sat in the repository describing, in the
+present tense, a version of the product that three months of commits had already replaced.
+Nobody writes those on purpose; they are what a document does when the code moves and the
+prose does not.
+
 ## What is deliberately not built yet
 
 **Authentication.** `/api/chat` is open. The rate limit and token budget bound the damage,
@@ -466,11 +535,13 @@ meter; exact provider usage metadata would fix it.
 over the governed library. It handles the ingredient-lookup case it is used for and avoids
 an embedding-model cold start on a free tier, but it does not do synonymy or paraphrase.
 
-**Evaluation of generation quality.** The golden-set eval is a regression gate on the
-*validator* — deterministic, no LLM. Nothing measures how often the model's first proposal
-is compliant, or whether the repair re-prompt actually improves compliance in aggregate.
-That needs a live eval harness with a cost budget, and it is the highest-value missing
-piece: the repair cap's design rationale is currently reasoned rather than measured.
+**A recorded baseline for the live eval.** `eval/live_eval.py` scores generation quality
+— schema validity, grounding in the governed library, first-pass gate rate, repair
+recovery, constraint targeting — and the weekly workflow runs it. But `eval/baseline.json`
+currently holds only the offline routing run (`"mode": "offline"`), so the live half
+computes its rates with nothing to compare them against. Until a full 46-brief run is
+recorded with `--update-baseline`, the live gate reports numbers rather than gating on
+them, and the repair cap's one-retry rationale stays reasoned rather than measured.
 
 **IDDSI texture compliance.** The `dysphagia_iddsi` module is a declared stub. It advises
 and never fails, and says so in its own violation message and in `/api/meta`. Texture-modified

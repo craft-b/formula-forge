@@ -31,6 +31,10 @@ on:
 jobs:
   live-eval:
     runs-on: ubuntu-latest
+    # The baseline step below commits and pushes eval/baseline.json, which the
+    # default read-only GITHUB_TOKEN cannot do.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
