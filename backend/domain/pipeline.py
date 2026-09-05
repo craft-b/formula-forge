@@ -47,11 +47,44 @@ _PROCESS_DEPENDENT_FIELDS = ["serving_g", "nutrients_per_serving", "overrun_pct"
 
 _UNREPAIRABLE_ERROR = 40.0  # percentage points off 100 beyond which we reject
 
-# A bare number inside model-authored prose. Percentages are excluded: the
-# model legitimately discusses its own ingredient percentages, which the domain
-# has already verified. What this catches is prose asserting a quantity the
-# system never computed — "roughly 200 mg calcium per serving".
-_NUMERIC_CLAIM = re.compile(r"\d+(?:\.\d+)?\s*(?!%)(?:[a-zA-Z°]|$)")
+# A nutrition quantity inside model-authored prose — the one kind of number
+# here that can contradict what the rules computed.
+#
+# This was previously any digit followed by a letter, which the live eval scored
+# at 0/37: it fired on every formula, because the prompt asks notes to cover
+# processing and processing is written in numbers. "Age the mix for 4 hours at
+# 4C" tripped it exactly as hard as "roughly 200 mg calcium per serving". A flag
+# that never varies carries no information, and a UI warning attached to every
+# single formula is one readers learn to skip — so the broad version was worse
+# than useless, not merely noisy.
+#
+# The narrow question is whether prose asserts a NUTRIENT value, since that is
+# what sits beside rule-computed values looking identical. Time, temperature,
+# speed and dimensions cannot be confused for nutrition, so they are not
+# flagged. Percentages stay excluded: the model is discussing its own ingredient
+# percentages, which the domain has already verified.
+_NUTRIENT_UNIT = r"""(?:
+      k?cal | (?:kilo)?calories? | kj | kilojoules?
+    | (?:milli|micro|kilo)?gram(?:me)?s? | mg | mcg | µg | kg | g
+    | IU | international\s+units?
+)"""
+
+#: A quantity in a unit the domain itself computes.
+_NUTRIENT_QUANTITY = re.compile(
+    rf"\b\d+(?:\.\d+)?\s*{_NUTRIENT_UNIT}\b",
+    re.IGNORECASE | re.VERBOSE,
+)
+
+#: A serving-level or daily-value assertion, which is a nutrition claim even
+#: when the unit is a percent — "supplies 20% of the daily value for calcium".
+_SERVING_CLAIM = re.compile(
+    r"\b\d+(?:\.\d+)?\s*%?\s*(?:of\s+)?"
+    r"(?:the\s+)?(?:recommended|daily)\s*(?:value|intake|allowance)"
+    r"|\b\d+(?:\.\d+)?\s*%\s*DV\b",
+    re.IGNORECASE,
+)
+
+_NUMERIC_CLAIM = _NUTRIENT_QUANTITY  # kept for callers that import the name
 
 
 def _has_numeric_claim(*texts: str) -> bool:
@@ -62,7 +95,10 @@ def _has_numeric_claim(*texts: str) -> bool:
     it can say they are unverified rather than letting them sit beside
     rule-computed values looking identical.
     """
-    return any(_NUMERIC_CLAIM.search(t or "") for t in texts)
+    return any(
+        _NUTRIENT_QUANTITY.search(text or "") or _SERVING_CLAIM.search(text or "")
+        for text in texts
+    )
 
 
 def validate_candidate(

@@ -220,7 +220,7 @@ the configured id against the account's model list once at startup, caching the
 verdict for the probe. A definitive absence fails readiness; a failure to check
 reports `unverified` and leaves a working instance in rotation.
 
-## F-E5 — The numeric-claim flag fires on every formula
+## F-E5 — [FIXED] The numeric-claim flag fired on every formula
 
 **Severity: medium. A safety signal that always fires is off.**
 
@@ -241,10 +241,22 @@ what the prompt asks notes to contain: *"processing, texture, or regulatory
 considerations."* So the UI marks every single formula as carrying unverified
 numbers, and a warning that never varies is a warning nobody reads.
 
-Not fixed — this changes user-visible behaviour and deserves a deliberate call.
-The shape of a fix is to distinguish a nutrient claim (a quantity in a unit the
-domain computes: mg, g, kcal, per serving) from a process parameter (time,
-temperature, rpm), rather than treating every digit as suspect.
+**Fixed.** The detector now asks whether prose asserts a NUTRIENT value, which
+is the only kind of number here that can sit beside a rule-computed value
+looking identical and contradict it. A pasteurisation temperature cannot.
+
+Two patterns replace the single broad one: a quantity in a unit the domain
+itself computes (mg, mcg, g, kg, kcal, kJ, IU and their spelled-out forms), and
+a serving-level or daily-value assertion, which counts as a nutrition claim even
+though it wears a percent sign. The model's own ingredient percentages stay
+excluded, since the domain has already verified those.
+
+`tests/test_numeric_claims.py` holds the line in both directions — the false
+positives that emptied the flag of meaning, and the true positives that are the
+reason it exists. Reverting to the broad pattern fails twelve of them by name;
+dropping the daily-value branch fails three. One test covers the case that
+narrowing could have created: a real claim buried inside legitimate processing
+prose must still fire, so the fix does not hand the model a hiding place.
 
 ## Corrections to the harness itself
 
