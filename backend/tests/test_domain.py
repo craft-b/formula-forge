@@ -257,6 +257,39 @@ def test_overrun_authority_belongs_to_the_caller():
     assert from_caller.composition.serving_g < from_format.composition.serving_g
 
 
+def test_overrun_outside_the_physical_range_is_rejected():
+    """The caller holds overrun authority, which makes it the caller's hazard.
+
+    serving_g = RACC / (1 + overrun). At -100% that divides by zero; below it
+    the serving mass goes negative, every per-serving nutrient flips sign, and
+    every clinical ceiling passes on a formula that is not compliant. That is a
+    silent wrong answer on the exact number the rulesets are checked against, so
+    it fails loudly instead.
+    """
+    cand = CandidateFormula.model_validate({
+        "product_name": "Edge", "product_format": "premium",
+        "ingredients": [{"ref": "milk whole", "percentage": 100}]})
+
+    for bad in (-0.1, -100.0, -150.0, 250.0):
+        with pytest.raises(ValueError, match="physical range"):
+            validate_candidate(cand, active_modules=[], overrun_pct=bad)
+
+
+def test_overrun_bounds_are_inclusive():
+    """0% (no air) and the ceiling are both legitimate formulations."""
+    cand = CandidateFormula.model_validate({
+        "product_name": "Edge", "product_format": "premium",
+        "ingredients": [{"ref": "milk whole", "percentage": 100}]})
+
+    dense = validate_candidate(cand, active_modules=[], overrun_pct=0.0)
+    airy = validate_candidate(cand, active_modules=[], overrun_pct=200.0)
+    assert dense.composition.overrun_pct == 0.0
+    assert airy.composition.overrun_pct == 200.0
+    # More air, less mix per serving — the relationship the guard protects.
+    assert airy.composition.serving_g < dense.composition.serving_g
+    assert dense.composition.serving_g > 0
+
+
 def test_model_cannot_move_a_clinical_verdict_via_overrun():
     """The whole point: a renal verdict must not depend on model-supplied text."""
     lines = [{"ref": "milk whole", "percentage": 58},

@@ -118,9 +118,27 @@ def serving_grams(overrun_pct: float) -> float:
 
 
 def resolve_overrun(product_format: str, overrun_pct: float | None) -> float:
-    if overrun_pct is not None:
-        return float(overrun_pct)
-    return C.DEFAULT_OVERRUN.get(product_format, C.DEFAULT_OVERRUN[C.DEFAULT_FORMAT]) * 100.0
+    """Resolve the overrun to use, rejecting values that are not physical.
+
+    Every per-serving number the clinical rulesets check is divided by
+    (1 + overrun), so this is the most load-bearing scalar in the domain. An
+    unchecked caller value of -100 raises ZeroDivisionError, and anything below
+    it yields a negative serving mass: per-serving nutrients all flip sign and
+    every ceiling passes. Failing loudly here is the difference between a caught
+    bug and a formula that reports itself compliant because its serving weighed
+    minus 350 grams.
+    """
+    if overrun_pct is None:
+        return C.DEFAULT_OVERRUN.get(product_format, C.DEFAULT_OVERRUN[C.DEFAULT_FORMAT]) * 100.0
+    overrun = float(overrun_pct)
+    lo, hi = C.OVERRUN_BOUNDS_PCT
+    if not lo <= overrun <= hi:
+        raise ValueError(
+            f"overrun_pct={overrun} is outside the physical range {lo}-{hi}%. "
+            "Overrun is the air fraction whipped into the mix; it cannot be "
+            "negative, and it is the divisor on every per-serving value."
+        )
+    return overrun
 
 
 def compute_composition(
