@@ -184,3 +184,103 @@ def test_sugars_and_fiber_do_not_exceed_carbohydrate(dataset):
             offenders.append(
                 (ing["id"], n["carbs_g"], n["sugars_g"], n["fiber_g"]))
     assert not offenders, f"(id, carbs, sugars, fiber) inconsistent: {offenders}"
+
+
+# ── Allergens ─────────────────────────────────────────────────────────────────
+# These are not documentation. The vegan ruleset blacklists "milk" and "egg" and
+# raises an *error*, which is what makes a formula fail. It also blacklists the
+# dairy and egg roles — but whey_protein_isolate and micellar_casein carry the
+# role "protein", so for those two the allergen field is the only thing standing
+# between a dairy protein and a formula labelled vegan.
+#
+# Nothing checked this field, and the ways it can go wrong are quiet: an omitted
+# allergen, or a misspelling such as "diary", never matches the blacklist and so
+# never raises. The formula simply passes.
+
+_DAIRY_ALLERGEN = "milk"
+# Closed vocabulary. A value outside it cannot match any ruleset blacklist, so a
+# typo disables the guard silently rather than failing.
+_KNOWN_ALLERGENS = {"milk", "egg", "soy", "tree_nut", "peanut", "wheat", "sesame"}
+
+
+def _is_dairy(ing) -> bool:
+    f = ing["functional"]
+    return (
+        ing["role"].startswith("dairy")
+        or (f.get("protein_type") or "").startswith("dairy")
+        or f.get("fat_type") == "dairy"
+        or f["lactose_g"] > 0
+    )
+
+
+def test_allergen_vocabulary_is_closed(dataset):
+    used = {a for ing in dataset["ingredients"] for a in ing["functional"]["allergens"]}
+    unknown = sorted(used - _KNOWN_ALLERGENS)
+    assert not unknown, (
+        f"unrecognised allergen labels {unknown}: a label no ruleset blacklists "
+        "cannot raise, so a misspelling silently disables the check"
+    )
+
+
+def test_every_dairy_ingredient_declares_milk(dataset):
+    offenders = [
+        ing["id"] for ing in dataset["ingredients"]
+        if _is_dairy(ing) and _DAIRY_ALLERGEN not in ing["functional"]["allergens"]
+    ]
+    assert not offenders, f"dairy ingredients without a milk allergen: {offenders}"
+
+
+def test_no_milk_allergen_without_a_dairy_signal(dataset):
+    """The converse, so the check cannot be satisfied by labelling everything."""
+    offenders = [
+        ing["id"] for ing in dataset["ingredients"]
+        if _DAIRY_ALLERGEN in ing["functional"]["allergens"] and not _is_dairy(ing)
+    ]
+    assert not offenders, f"milk allergen with no dairy signal: {offenders}"
+
+
+def test_egg_and_soy_proteins_declare_their_allergen(dataset):
+    offenders = []
+    for ing in dataset["ingredients"]:
+        protein = ing["functional"].get("protein_type") or ""
+        allergens = ing["functional"]["allergens"]
+        if protein == "egg" and "egg" not in allergens:
+            offenders.append((ing["id"], "egg"))
+        if protein == "soy" and "soy" not in allergens:
+            offenders.append((ing["id"], "soy"))
+    assert not offenders, f"protein type without its allergen: {offenders}"
+
+
+def test_lactose_implies_milk(dataset):
+    offenders = [
+        ing["id"] for ing in dataset["ingredients"]
+        if ing["functional"]["lactose_g"] > 0
+        and _DAIRY_ALLERGEN not in ing["functional"]["allergens"]
+    ]
+    assert not offenders, f"lactose present but no milk allergen: {offenders}"
+
+
+def test_allergen_rule_is_what_stops_dairy_protein_in_a_vegan_formula():
+    """Behavioural proof that this data is load-bearing.
+
+    whey_protein_isolate's role is "protein", which the vegan ruleset does not
+    blacklist. Only its milk allergen rejects the formula, so the field cannot be
+    treated as descriptive metadata.
+    """
+    from domain import CandidateFormula, validate_candidate
+
+    candidate = CandidateFormula.model_validate({
+        "product_name": "Vegan?", "product_format": "premium",
+        "ingredients": [
+            {"ref": "almond milk unsweetened", "percentage": 70},
+            {"ref": "coconut cream", "percentage": 18},
+            {"ref": "whey protein isolate", "percentage": 6},
+            {"ref": "sucrose", "percentage": 6},
+        ]})
+    result = validate_candidate(candidate, active_modules=["vegan"])
+
+    assert result.type == "formula"
+    assert result.validation.passed is False
+    errors = {v.rule_id for v in result.validation.violations if v.severity == "error"}
+    assert "vegan.allergen.milk" in errors, (
+        f"expected the allergen rule to reject this formula; errors were {errors}")
