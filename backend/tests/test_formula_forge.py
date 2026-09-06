@@ -128,6 +128,49 @@ class TestDetectIntent:
     def test_search_intent_detected(self, message):
         assert detect_intent(message) == "search"
 
+    # A constraint qualifier beside a product noun is a brief, not a question.
+    # _FORMULATION_RE needs a verb or one of the two unambiguous nouns
+    # ("formula", "formulation"), so all of these used to reach the Q&A agent —
+    # the direction the eval's own notes call dangerous, because the ruleset
+    # never runs and the formula is validated against nothing.
+    @pytest.mark.parametrize("message", [
+        "renal gelato",
+        "vegan sorbet",
+        "diabetic ice cream",
+        "low-fat soft serve",
+        "high-protein frozen dessert",
+        "dysphagia ice cream",
+        "a renal gelato please",
+        "low-phosphorus sherbet",
+    ])
+    def test_terse_constrained_brief_is_formulation(self, message):
+        assert detect_intent(message) == "formulate"
+
+    # The disambiguator has to survive the phrasings that share its signals: a
+    # product noun and a constraint word inside an actual question.
+    @pytest.mark.parametrize("message", [
+        "what is a gelato?",
+        "why is my low-fat soft serve icy?",
+        "how does a vegan sorbet differ from a dairy one?",
+        "explain low-fat gelato",
+        "are diabetic sorbets sweeter?",
+        "is a renal gelato even possible?",
+        "compare vegan sorbet and gelato",
+    ])
+    def test_questions_about_constrained_products_stay_questions(self, message):
+        assert detect_intent(message) == "search"
+
+    # A product noun with no constraint stays ambiguous on purpose: "chocolate
+    # ice cream" is as likely to begin a question as a brief, and the explicit
+    # "Generate verified formula" CTA carries intent for the UI path anyway.
+    @pytest.mark.parametrize("message", [
+        "chocolate ice cream",
+        "gelato",
+        "soft serve",
+    ])
+    def test_bare_product_noun_alone_does_not_force_formulation(self, message):
+        assert detect_intent(message) == "search"
+
 
 # ── Food search ───────────────────────────────────────────────────────────────
 
