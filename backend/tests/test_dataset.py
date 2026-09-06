@@ -140,3 +140,47 @@ def test_curated_rows_may_still_assert_a_zero(dataset):
         and all(ing["nutrients_per_100g"][m] == 0.0 for m in _CLINICAL_MINERALS)
     ]
     assert curated_zeros, "expected some curated rows to legitimately carry zeros"
+
+
+# ── Mass conservation ─────────────────────────────────────────────────────────
+
+
+def test_no_ingredient_contains_more_than_100g_per_100g(dataset):
+    """water + protein + fat + carbohydrate cannot exceed the ingredient itself.
+
+    total_solids is computed as 100 - water, and PAC/POD scale off carbs, so a
+    row that overstates both is internally inconsistent in two directions at
+    once. Three rows did: dextrose monohydrate summed to 109 g (carbs left at
+    100 when 9 g of the crystal is water), and guar and locust bean gum to 103.5
+    and 104.6.
+
+    The bound is 100.5 rather than 100 to absorb rounding, not to leave room.
+    """
+    offenders = []
+    for ing in dataset["ingredients"]:
+        n = ing["nutrients_per_100g"]
+        total = n["water_g"] + n["protein_g"] + n["fat_g"] + n["carbs_g"]
+        if total > 100.5:
+            offenders.append((ing["id"], round(total, 1)))
+    assert not offenders, f"rows summing past 100 g per 100 g: {offenders}"
+
+
+# Sugars and fibre are subsets of carbohydrate, so neither should exceed it —
+# but USDA computes carbohydrate *by difference* (100 minus water, protein, fat
+# and ash) while measuring sugars directly, so the two carry different errors and
+# dairy inverts slightly. Whole milk is the real case: lactose 5.05 g against
+# carbohydrate 4.80 g, which is what USDA itself reports. The tolerance absorbs
+# that methodological artefact and nothing larger; a gross inversion, such as a
+# sweetener row with sugars far above its carbohydrate, still fails.
+_CARB_SUBSET_TOLERANCE_G = 0.5
+
+
+def test_sugars_and_fiber_do_not_exceed_carbohydrate(dataset):
+    offenders = []
+    for ing in dataset["ingredients"]:
+        n = ing["nutrients_per_100g"]
+        ceiling = n["carbs_g"] + _CARB_SUBSET_TOLERANCE_G
+        if n["sugars_g"] > ceiling or n["fiber_g"] > ceiling:
+            offenders.append(
+                (ing["id"], n["carbs_g"], n["sugars_g"], n["fiber_g"]))
+    assert not offenders, f"(id, carbs, sugars, fiber) inconsistent: {offenders}"
