@@ -3,6 +3,7 @@ import datetime
 
 import pytest
 
+import ideas
 from ideas import _freshness, ranked_ideas, _load_corpus
 
 VALID_SOURCE_TYPES = {"tiktok", "reddit", "artisan", "brand", "report"}
@@ -92,3 +93,43 @@ class TestFreshness:
     def test_days_are_reported(self):
         today = datetime.date(2026, 8, 15)
         assert _freshness("2026-07-13", today)["days_since_update"] == 33
+
+
+# ── Lifecycle integrity ───────────────────────────────────────────────────────
+
+
+def test_every_corpus_lifecycle_is_in_the_adoption_curve():
+    """A lifecycle the curve does not know used to score a silent 50.
+
+    The corpus is designed to be edited by hand, so a typo is the expected
+    failure. "expanding" is worth 85; a mistyped "expandng" scoring 50 would
+    demote the idea by 35 points and change the ranking with nothing reporting
+    it.
+    """
+    corpus = ideas._load_corpus()
+    curve = corpus["scoring"]["adoption_curve"]
+    unknown = sorted({i["lifecycle"] for i in corpus["ideas"]} - set(curve))
+    assert not unknown, f"lifecycles absent from adoption_curve: {unknown}"
+
+
+def test_unknown_lifecycle_raises_rather_than_defaulting():
+    scoring = {"weights": {"social": 0.2, "momentum": 0.2, "breadth": 0.2,
+                           "adoption": 0.2, "feasibility": 0.2},
+               "adoption_curve": {"emerging": 55}}
+    idea = {"id": "probe", "lifecycle": "expandng",  # deliberate typo
+            "sources": [], "signals": {"social": 50, "momentum": 50,
+                                       "feasibility": 50}}
+    with pytest.raises(ValueError, match="adoption_curve"):
+        ideas._score(idea, scoring)
+
+
+def test_known_lifecycle_still_scores_from_the_curve():
+    scoring = {"weights": {"social": 0.0, "momentum": 0.0, "breadth": 0.0,
+                           "adoption": 1.0, "feasibility": 0.0},
+               "adoption_curve": {"expanding": 85}}
+    idea = {"id": "probe", "lifecycle": "expanding",
+            "sources": [], "signals": {"social": 0, "momentum": 0,
+                                       "feasibility": 0}}
+    composite, breakdown = ideas._score(idea, scoring)
+    assert breakdown["adoption"] == 85.0
+    assert composite == 85.0

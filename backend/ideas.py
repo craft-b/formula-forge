@@ -74,11 +74,24 @@ def _score(idea: dict, scoring: dict) -> tuple[float, dict[str, float]]:
     weights = scoring["weights"]
     curve = scoring["adoption_curve"]
     sig = idea["signals"]
+    lifecycle = idea["lifecycle"]
+    if lifecycle not in curve:
+        # This used to fall back to a neutral 50. The corpus is meant to be
+        # edited — the module docstring says changing signals is a data change,
+        # not a code change — so a typo is the expected way this goes wrong, and
+        # a silent 50 answers it by moving the idea's adoption score without
+        # telling anyone. "expanding" scores 85, so a mistyped "expandng" would
+        # quietly demote an idea by 35 points and reorder the board.
+        raise ValueError(
+            f"idea {idea['id']!r} has lifecycle {lifecycle!r}, which is not in "
+            f"the corpus adoption_curve ({sorted(curve)}). Add it to the curve "
+            "or correct the idea."
+        )
     components = {
         "social": float(sig["social"]),
         "momentum": float(sig["momentum"]),
         "breadth": min(len(idea["sources"]), _BREADTH_SATURATION) / _BREADTH_SATURATION * 100,
-        "adoption": float(curve.get(idea["lifecycle"], 50)),
+        "adoption": float(curve[lifecycle]),
         "feasibility": float(sig["feasibility"]),
     }
     composite = sum(weights[k] * components[k] for k in weights)
