@@ -45,6 +45,33 @@ class TokenBudget:
                 return False
             return True
 
+    def reserve(self, session_id: str, est_tokens: int) -> bool:
+        """Atomically admit and consume `est_tokens`, or refuse. Use this to admit.
+
+        `allow` followed by `record` is two lock acquisitions with a gap between
+        them, so concurrent callers can all pass the check before any of them
+        consumes anything — the exact burst this class documents itself as
+        preventing. Today the one caller is an async endpoint with no await
+        between the two calls, so the event loop cannot interleave and the gap is
+        closed by scheduling accident rather than by design. Adding an await,
+        making the endpoint sync so it runs in the threadpool, or calling this
+        from a worker thread would each reopen it silently, and the budget's whole
+        job is to fail safe.
+
+        Check and consume happen under one lock here, so admission is atomic
+        regardless of how the caller is scheduled.
+        """
+        with self._lock:
+            self._roll_if_new_day()
+            if self._global_used + est_tokens > self.global_daily:
+                return False
+            if self._session_used.get(session_id, 0) + est_tokens > self.session_daily:
+                return False
+            self._global_used += est_tokens
+            self._session_used[session_id] = (
+                self._session_used.get(session_id, 0) + est_tokens)
+            return True
+
     def record(self, session_id: str, tokens: int) -> None:
         with self._lock:
             self._roll_if_new_day()

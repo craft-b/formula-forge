@@ -474,14 +474,14 @@ async def _stream_agent(
 async def chat(request: Request, req: ChatRequest):
     session_id = req.session_id or str(uuid.uuid4())
 
-    # Token budget: reserve an estimate up front so a burst cannot overrun.
+    # Token budget: check and consume in one atomic step, so a burst cannot all
+    # pass the check before any of them consumes (see TokenBudget.reserve).
     est = estimate_tokens(req.message)
-    if not budget.allow(session_id, est):
+    if not budget.reserve(session_id, est):
         return JSONResponse(
             status_code=429,
             content={"error": "Daily token budget exceeded. Please try again tomorrow."},
         )
-    budget.record(session_id, est)
 
     history = list(conversation_store.get(session_id, []))
     history.append(HumanMessage(content=req.message))
