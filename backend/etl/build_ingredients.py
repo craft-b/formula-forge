@@ -26,13 +26,14 @@ from datetime import date
 
 from etl.curated_ingredients import CURATED_INGREDIENTS
 from etl.nutrient_map import (
+    CLINICAL_MINERAL_FIELDS,
     DEFAULT_ZERO_FIELDS,
     ENERGY_NUMBERS,
     NUTRIENT_FIELDS,
     NUTRIENT_NUMBERS,
 )
 
-DATASET_VERSION = "2026.07.0"
+DATASET_VERSION = "2026.09.0"
 TRANSFORM_VERSION = "etl-1.0.0"
 
 _HERE = os.path.dirname(__file__)
@@ -108,8 +109,17 @@ def _resolve_nutrients(ing: dict, fdc_data: dict[str, dict[str, float]]) -> tupl
             vector[field] = round(float(raw[field]), _ROUND[field])
         elif field in DEFAULT_ZERO_FIELDS:
             vector[field] = 0.0
+        elif field in CLINICAL_MINERAL_FIELDS and source == "curated":
+            # A curated row is a human assertion, including an assertion of zero.
+            vector[field] = 0.0
         else:
-            raise ValueError(f"{ing['id']}: missing required nutrient '{field}'")
+            raise ValueError(
+                f"{ing['id']}: source record has no '{field}' row. "
+                "Zero is not a safe substitute for a mineral the clinical "
+                "rulesets check — it makes a formula look compliant. Either "
+                "point fdc_id at a record that reports it, or add an explicit "
+                "curated nutrients_per_100g override."
+            )
 
     # Energy: use the FDC/curated value when present, else derive via Atwater
     # general factors (protein 4, fat 9, carbohydrate 4 kcal/g). A handful of

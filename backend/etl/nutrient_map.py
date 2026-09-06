@@ -26,14 +26,28 @@ NUTRIENT_NUMBERS: dict[str, str] = {
 # Energy (kcal) resolution order: direct kcal, then Atwater specific, then general.
 ENERGY_NUMBERS: tuple[str, ...] = ("1008", "2048", "2047")
 
-# Nutrients that legitimately default to 0.0 when a record omits them. A pure
-# fat carries no protein/carbohydrate; a refined sugar carries no fat; some FDC
+# Macros that legitimately default to 0.0 when a record omits them. A pure fat
+# carries no protein/carbohydrate; a refined sugar carries no fat; some FDC
 # Foundation Foods omit a macro row entirely (e.g. butter has no protein row).
-# Only water is never zero-defaulted — it is required for total-solids math and
-# its absence signals a genuinely malformed source record.
+# Water is never zero-defaulted — it is required for total-solids math and its
+# absence signals a genuinely malformed source record.
 DEFAULT_ZERO_FIELDS: frozenset[str] = frozenset(
-    {"protein_g", "fat_g", "carbs_g", "sugars_g", "fiber_g",
-     "sodium_mg", "potassium_mg", "phosphorus_mg", "calcium_mg"}
+    {"protein_g", "fat_g", "carbs_g", "sugars_g", "fiber_g"}
+)
+
+# The minerals the clinical rulesets gate on. "Absent" and "zero" are different
+# claims for these, and only one of them is safe to guess. A missing row in a
+# source record means the lab did not report it, not that the food contains
+# none — and substituting zero moves the number in the direction that makes a
+# formula look compliant.
+#
+# This is not hypothetical. egg_yolk was built from FDC 748236, whose 48
+# nutrient rows include no minerals at all, so it shipped with phosphorus 0.0
+# against a real value near 400 mg/100 g — on the nutrient the renal ruleset
+# checks. A curated entry may still assert a zero, because a human wrote it
+# down; an FDC-sourced one may not have it inferred.
+CLINICAL_MINERAL_FIELDS: frozenset[str] = frozenset(
+    {"sodium_mg", "potassium_mg", "phosphorus_mg", "calcium_mg"}
 )
 
 # Canonical nutrient field order for the governed dataset.

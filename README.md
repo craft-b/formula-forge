@@ -255,7 +255,7 @@ model id in use:
   "dependencies": {
     "llm_client":         {"status": "ok", "detail": "API key configured; chat model initialized."},
     "agent_graph":        {"status": "ok", "detail": "Compiled LangGraph agent loaded."},
-    "ingredient_library": {"status": "ok", "detail": "dataset 2026.07.0, 34 ingredients."}
+    "ingredient_library": {"status": "ok", "detail": "dataset 2026.09.0, 34 ingredients."}
   }
 }
 ```
@@ -463,7 +463,7 @@ The system as it stands, measured rather than asserted:
 
 | | |
 |---|---|
-| Governed ingredient library | 34 ingredients, dataset `2026.07.0`, every row with a full nutrient vector and provenance |
+| Governed ingredient library | 34 ingredients, dataset `2026.09.0`, every row with a full nutrient vector and provenance |
 | Model-authored numbers reaching a user | 0, enforced by type and pinned by test |
 | Domain + gate test suite | 231 tests, no live LLM, deterministic in CI |
 | Golden compliance set | 18 brief-to-formula cases, 100% schema-valid, 100% compliance accuracy |

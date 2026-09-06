@@ -90,3 +90,53 @@ def test_covers_all_constraint_module_needs(dataset):
     for required in ("dairy_fat", "protein", "sweetener", "polyol",
                      "stabilizer", "fat", "base"):
         assert required in roles, f"no ingredient with role '{required}'"
+
+
+# ── Clinically-gated minerals ─────────────────────────────────────────────────
+# egg_yolk was built from FDC 748236, a Foundation Food whose 48 nutrient rows
+# contain no minerals at all. The ETL treated "absent" as "zero", so the library
+# shipped a yolk with phosphorus 0.0 where the real figure is near 400 mg/100 g
+# — silently, on the nutrient the renal ruleset gates. Every formula containing
+# egg yolk under-reported phosphorus and looked more compliant than it was.
+
+_CLINICAL_MINERALS = ("sodium_mg", "potassium_mg", "phosphorus_mg", "calcium_mg")
+
+
+def test_no_fdc_row_has_an_all_zero_mineral_profile(dataset):
+    """A real food measured against a real record has some mineral content.
+
+    All four reading zero on an FDC-sourced row means the source omitted them
+    and something substituted a number, which is the defect this guards.
+    """
+    offenders = [
+        ing["id"] for ing in dataset["ingredients"]
+        if ing["provenance"]["source"] != "curated"
+        and all(ing["nutrients_per_100g"][m] == 0.0 for m in _CLINICAL_MINERALS)
+    ]
+    assert not offenders, (
+        f"FDC-sourced ingredients with every clinical mineral at zero: {offenders}. "
+        "Point fdc_id at a record that reports them, or add a curated override."
+    )
+
+
+def test_egg_yolk_reports_its_phosphorus(dataset):
+    """The specific row that was wrong, pinned by name."""
+    yolk = next(i for i in dataset["ingredients"] if i["id"] == "egg_yolk")
+    phosphorus = yolk["nutrients_per_100g"]["phosphorus_mg"]
+    # Egg yolk is one of the most phosphorus-dense ordinary foods; anything near
+    # zero means the mineral rows went missing again.
+    assert phosphorus > 300, f"egg_yolk phosphorus is {phosphorus} mg/100 g"
+
+
+def test_curated_rows_may_still_assert_a_zero(dataset):
+    """The guard must not force nonsense onto refined ingredients.
+
+    A refined oil or a crystalline sweetener genuinely contains no measurable
+    minerals, and a curated row is a human writing that down.
+    """
+    curated_zeros = [
+        ing["id"] for ing in dataset["ingredients"]
+        if ing["provenance"]["source"] == "curated"
+        and all(ing["nutrients_per_100g"][m] == 0.0 for m in _CLINICAL_MINERALS)
+    ]
+    assert curated_zeros, "expected some curated rows to legitimately carry zeros"

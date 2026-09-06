@@ -270,8 +270,14 @@ CURATED_INGREDIENTS: list[dict] = [
 
     # ── Eggs (FDC Foundation Foods) ───────────────────────────────────────────
     {
+        # FDC 748236 ("Eggs, Grade A, Large, egg yolk") reports 48 nutrients
+        # and not one mineral, so it built a yolk with phosphorus 0.0 — against
+        # a real value near 400 mg/100 g, on the nutrient the renal ruleset
+        # gates. 329596 is a Foundation Food covering the same ingredient with a
+        # complete vector, which keeps macros and minerals from one record
+        # rather than grafting two together.
         "id": "egg_yolk", "name": "Egg yolk, raw", "role": "egg",
-        "fdc_id": 748236,
+        "fdc_id": 329596,
         "functional": {"pac": 0.0, "pod": 0.0, "fat_type": None,
                        "protein_type": "egg", "stabilizer_class": "emulsifier",
                        "lactose_g": 0.0, "allergens": ["egg"], "cost_per_kg_usd": 7.0},
