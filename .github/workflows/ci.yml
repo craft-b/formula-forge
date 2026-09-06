@@ -35,7 +35,10 @@ jobs:
           # Real key not required — LLM calls are mocked in all tests.
           GROQ_API_KEY: test-key-ci-placeholder
           LLM_PROVIDER: groq
-          GROQ_MODEL: llama-3.3-70b-versatile
+          # Matches the repository default. It was pinned to a model Groq has
+          # since retired, which is harmless while every test mocks the client
+          # but means CI asserts against an id nothing can serve.
+          GROQ_MODEL: openai/gpt-oss-120b
         run: pytest tests/ -v
 
       - name: Routing eval (offline — no API key, gates against baseline)

@@ -176,6 +176,22 @@ class TestModelIdHasOneSource:
         assert llm.DEFAULT_GROQ_MODEL is config.DEFAULT_GROQ_MODEL
         assert llm.DEFAULT_FALLBACK_MODEL is config.DEFAULT_FALLBACK_MODEL
 
+    def test_defaults_agree_when_the_env_var_is_absent(self, monkeypatch):
+        """The conditions the bug actually needed: GROQ_MODEL unset.
+
+        The suite sets GROQ_MODEL, so every reader agrees simply by reading the
+        same variable. The defaults are what diverged, and they are only visible
+        with the variable gone — which means rebuilding Settings, since it reads
+        the environment once at construction.
+        """
+        import config
+
+        monkeypatch.delenv("GROQ_MODEL", raising=False)
+        fresh = config.Settings()
+        assert fresh.groq_model == config.DEFAULT_GROQ_MODEL
+        assert fresh.groq_model == llm.model_for("groq")
+        assert fresh.fallback_model == config.DEFAULT_FALLBACK_MODEL
+
     def test_env_override_moves_every_reader_together(self, monkeypatch):
         monkeypatch.setenv("GROQ_MODEL", "some/other-model")
         # model_for reads the environment at call time, which is what the client

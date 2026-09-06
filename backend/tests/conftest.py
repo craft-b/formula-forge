@@ -9,7 +9,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 # without a real key. Actual LLM calls are mocked per-test in test_formula_forge.py.
 os.environ.setdefault("GROQ_API_KEY", "test-key-placeholder")
 os.environ.setdefault("LLM_PROVIDER", "groq")
-os.environ.setdefault("GROQ_MODEL", "llama-3.3-70b-versatile")
+# Matches the repository default. Pinning a retired id here made the suite
+# assert against a model nothing can serve, which is harmless while the
+# client is mocked and misleading the moment it is not.
+os.environ.setdefault("GROQ_MODEL", "openai/gpt-oss-120b")
 
 # Abuse controls: keep default limits out of the suite's way. Individual tests
 # override these (main.CHAT_RATE_LIMIT / main.budget) to exercise the controls.
