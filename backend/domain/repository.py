@@ -70,7 +70,7 @@ class IngredientRepository:
         ref_tokens = _tokens(ref)
         if not ref_tokens:
             return None
-        best, best_score = None, 0.0
+        scored: list[tuple[float, str]] = []
         for ing_id, idx_tokens in self._token_index.items():
             # Guard against phantom matches: the ingredient's head token must be
             # present in the reference (a shared generic word is not enough).
@@ -79,11 +79,30 @@ class IngredientRepository:
             overlap = ref_tokens & idx_tokens
             if not overlap:
                 continue
-            score = len(overlap) / len(ref_tokens)
-            if score > best_score:
-                best, best_score = ing_id, score
+            scored.append((len(overlap) / len(ref_tokens), ing_id))
+
         # Require at least half the ref's meaningful tokens to match.
-        return self._by_id[best] if best and best_score >= 0.5 else None
+        best_score = max((s for s, _ in scored), default=0.0)
+        if best_score < 0.5:
+            return None
+
+        # An ambiguous reference is an unresolved one. Previously the first
+        # ingredient at the best score won, which meant dict insertion order --
+        # i.e. the order of rows in ingredients.json -- silently decided the
+        # answer. "milk" tied three ways across whole, skim and 2%, whose fat
+        # differs by a factor of forty, and "milk powder" landed on liquid whole
+        # milk at exactly the 0.5 threshold: 88% water where nonfat dry milk is
+        # 3%. Both produced a complete, confident nutrient vector for an
+        # ingredient nobody chose.
+        #
+        # Refusing instead is what this module already claims to do -- a
+        # reference that cannot be pinned down is reported, not guessed -- and
+        # the caller hard-fails it, which puts the ingredient name in front of
+        # the model in the repair prompt.
+        tied = [ing_id for score, ing_id in scored if score == best_score]
+        if len(tied) > 1:
+            return None
+        return self._by_id[tied[0]]
 
 
 @lru_cache(maxsize=1)
