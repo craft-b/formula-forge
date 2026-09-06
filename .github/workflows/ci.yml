@@ -75,6 +75,13 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Lint (eslint)
+        # package.json has carried a `lint` script that CI never ran, and it had
+        # drifted to five errors — so the command was there but unusable. Gated
+        # now, before the build, so it cannot drift again.
+        working-directory: frontend
+        run: npm run lint
+
       - name: Typecheck and build
         working-directory: frontend
         run: npm run build

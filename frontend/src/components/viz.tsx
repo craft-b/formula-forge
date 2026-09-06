@@ -1,20 +1,10 @@
 // Visualization primitives for the formulation workspace.
-// Palette validated with the dataviz six-checks (lightness band, chroma floor,
-// CVD separation, contrast vs surface) — do not swap hues without re-validating:
-//   composition categorical: teal #0d9488 · indigo #4f46e5 · amber #d97706 · fuchsia #c026d3
-// Water is the neutral remainder track, not a category. Status colors are
-// reserved (pass/fail/warn) and always ship with an icon + label. Every numeric
-// uses tabular figures (.num) so columns align at a glance.
+// Status colors are reserved (pass/fail/warn) and always ship with an icon +
+// label. Every numeric uses tabular figures (.num) so columns align at a glance.
+// The composition palette lives in lib/palette.ts — it is shared data rather
+// than a component, and this file never used it.
 
 import type { ReactNode } from "react"
-
-export const COMPOSITION_COLORS = {
-  fat: "#0d9488",
-  msnf: "#4f46e5",
-  sugars: "#d97706",
-  other: "#c026d3",
-  water: "#e2e8f0",
-} as const
 
 // ── Section heading (uppercase micro-label used across the report) ────────────
 
