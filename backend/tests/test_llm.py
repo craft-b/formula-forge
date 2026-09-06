@@ -151,3 +151,41 @@ def test_a_missing_model_is_reported_as_missing_not_unverified(monkeypatch):
     status, detail = llm.verify_model_available("llama-3.3-70b-versatile")
     assert status == "missing"
     assert "404" in detail
+
+
+# ── One model id ──────────────────────────────────────────────────────────────
+# The id was declared twice with different values: llm.py defaulted to
+# openai/gpt-oss-120b and config.Settings to llama-3.3-70b-versatile. With
+# GROQ_MODEL unset the process called the first, /health and /api/meta reported
+# the second, and verify_model_available checked the model nobody was calling —
+# defeating the startup check that exists precisely to stop a retired model
+# hiding behind a green /health.
+
+
+class TestModelIdHasOneSource:
+    def test_settings_default_matches_the_resolver(self):
+        import config
+        import main
+
+        assert config.settings.groq_model == llm.model_for("groq")
+        assert main._active_model() == llm.model_for("groq")
+
+    def test_llm_constant_is_the_config_constant(self):
+        import config
+
+        assert llm.DEFAULT_GROQ_MODEL is config.DEFAULT_GROQ_MODEL
+        assert llm.DEFAULT_FALLBACK_MODEL is config.DEFAULT_FALLBACK_MODEL
+
+    def test_env_override_moves_every_reader_together(self, monkeypatch):
+        monkeypatch.setenv("GROQ_MODEL", "some/other-model")
+        # model_for reads the environment at call time, which is what the client
+        # construction path uses.
+        assert llm.model_for("groq") == "some/other-model"
+
+    def test_active_model_reports_unset_rather_than_raising(self, monkeypatch):
+        """A misconfigured non-Groq deployment must not break the readiness probe."""
+        import main
+
+        monkeypatch.setattr(main.settings, "llm_provider", "openai")
+        monkeypatch.delenv("LLM_MODEL", raising=False)
+        assert main._active_model() == "unset"

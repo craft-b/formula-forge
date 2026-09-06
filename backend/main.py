@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
@@ -28,7 +27,7 @@ from graph import (
     regenerate_formula,
 )
 from generation import parse_and_validate as _parse_and_validate
-from llm import verify_model_available
+from llm import model_for, verify_model_available
 from budget import TokenBudget, estimate_tokens
 from observability import new_request_id, request_id_var, setup_logging
 
@@ -284,12 +283,20 @@ def api_ideas():
 def _active_model() -> str:
     """The model id this process will actually call.
 
-    Mirrors `llm._model_for()` — the source of truth — so a non-Groq deployment
-    does not get told it is running a Groq model.
+    Delegates to `llm.model_for` rather than re-deriving from settings. It used
+    to claim it mirrored that function while reading a different default, so with
+    GROQ_MODEL unset the process called one model, /health and /api/meta reported
+    another, and the startup availability check verified the one nobody was
+    calling — the precise blind spot that check exists to close.
+
+    Falls back to "unset" instead of raising: a non-Groq deployment with no
+    LLM_MODEL is a misconfiguration to report through the readiness payload, not
+    a reason for the probe itself to fail.
     """
-    if settings.llm_provider.lower() == "groq":
-        return settings.groq_model
-    return os.getenv("LLM_MODEL") or "unset"
+    try:
+        return model_for(settings.llm_provider)
+    except ValueError:
+        return "unset"
 
 
 def _probe_llm_client() -> dict:

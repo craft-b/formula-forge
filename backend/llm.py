@@ -16,34 +16,12 @@ from __future__ import annotations
 
 import os
 
-import config  # noqa: F401  # importing loads .env once (single load point, F15)
+# Importing config loads .env once (single load point, F15) and supplies the
+# model ids, which live there so this module and the typed Settings cannot
+# disagree about what is running.
+from config import DEFAULT_FALLBACK_MODEL, DEFAULT_GROQ_MODEL  # noqa: F401
 
 DEFAULT_TEMPERATURE = 0.3
-
-# Both previous defaults — llama-3.3-70b-versatile and llama-3.1-8b-instant —
-# were retired by Groq and now return 404 model_not_found. That took production
-# down silently: /health does not call the model, so it reported "ok" against a
-# model that no longer existed, and every one of 208 tests passed because they
-# all mock the LLM. The live eval found it on its first real run.
-#
-# The lesson is in the pairing, not the names: a primary and a fallback from the
-# same family retire together, so the fallback chain fell into the same hole.
-#
-# These two are ALSO the same family, and that is a known, accepted risk rather
-# than an oversight. The account's model list was checked: of 14 models, only
-# these two can do this job. qwen/qwen3.6-27b cannot hold JSON mode, and
-# qwen/qwen3.8-27b rejects a formulation prompt as too large on this tier; the
-# rest are speech, TTS, classifiers or agentic systems. So gpt-oss-120b/20b is
-# not the safest available pairing — it is the only working one.
-#
-# What actually mitigates the risk is therefore not diversity but detection:
-# `verify_model_available` checks the configured id at startup, so the next
-# retirement fails readiness loudly instead of hiding behind a green /health.
-# If a second family that can hold JSON mode at this prompt size becomes
-# available, the fallback should move to it.
-DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
-DEFAULT_FALLBACK_MODEL = "openai/gpt-oss-20b"
-
 
 def _build_groq(model: str, temperature: float):
     from langchain_groq import ChatGroq
@@ -92,8 +70,12 @@ def build_chat_model(provider: str, model: str, temperature: float = DEFAULT_TEM
     return _PROVIDERS[key](model, temperature)
 
 
-def _model_for(provider: str) -> str:
-    """Resolve the model id for a provider from the environment."""
+def model_for(provider: str) -> str:
+    """Resolve the model id for a provider from the environment.
+
+    Public because /health and /api/meta must report the id this process will
+    actually call. They used to derive it separately and could disagree with it.
+    """
     if provider.lower() == "groq":
         return os.getenv("GROQ_MODEL", DEFAULT_GROQ_MODEL)
     model = os.getenv("LLM_MODEL")
@@ -152,7 +134,7 @@ def get_llm():
     fallback chain (e.g. in tests or single-model deployments).
     """
     provider = os.getenv("LLM_PROVIDER", "groq").lower()
-    primary = build_chat_model(provider, _model_for(provider), DEFAULT_TEMPERATURE)
+    primary = build_chat_model(provider, model_for(provider), DEFAULT_TEMPERATURE)
 
     if os.getenv("ENABLE_LLM_FALLBACK", "true").lower() != "true":
         return primary
@@ -160,7 +142,7 @@ def get_llm():
     fb_provider = os.getenv("FALLBACK_PROVIDER", "groq").lower()
     fb_model = os.getenv("FALLBACK_MODEL", DEFAULT_FALLBACK_MODEL)
     # Skip a pointless fallback that is identical to the primary.
-    if fb_provider == provider and fb_model == _model_for(provider):
+    if fb_provider == provider and fb_model == model_for(provider):
         return primary
 
     fallback = build_chat_model(fb_provider, fb_model, DEFAULT_TEMPERATURE)
