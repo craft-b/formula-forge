@@ -8,17 +8,22 @@ from fastapi.testclient import TestClient
 
 import main
 from budget import TokenBudget, estimate_tokens
-from main import _parse_origins, app
+from config import Settings
+from main import app
 
 
 # ── CORS allowlist ────────────────────────────────────────────────────────────
 
 class TestCorsAllowlist:
-    def test_parse_origins_splits_and_trims(self):
-        assert _parse_origins("a, b ,c") == ["a", "b", "c"]
+    # These exercise Settings.origins, which is what main.ALLOWED_ORIGINS is
+    # built from. main.py previously carried a byte-identical private copy that
+    # nothing called, and these tests covered that copy — so they would have
+    # stayed green while the live parser broke.
+    def test_origins_splits_and_trims(self):
+        assert Settings(allowed_origins="a, b ,c").origins == ["a", "b", "c"]
 
-    def test_parse_origins_drops_empty(self):
-        assert _parse_origins("a,, ,b") == ["a", "b"]
+    def test_origins_drops_empty(self):
+        assert Settings(allowed_origins="a,, ,b").origins == ["a", "b"]
 
     def test_no_wildcard_origin_configured(self):
         assert "*" not in main.ALLOWED_ORIGINS

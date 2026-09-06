@@ -27,20 +27,13 @@ from graph import (
     iterate_formula,
     regenerate_formula,
 )
-from domain import CandidateFormula, validate_candidate
-from generation import candidate_from_llm as _candidate_from_llm
 from generation import parse_and_validate as _parse_and_validate
-from json_utils import extract_json_block
 from llm import verify_model_available
 from budget import TokenBudget, estimate_tokens
 from observability import new_request_id, request_id_var, setup_logging
 
 setup_logging(settings.log_level)
 logger = logging.getLogger(__name__)
-
-
-def _parse_origins(raw: str) -> list[str]:
-    return [o.strip() for o in raw.split(",") if o.strip()]
 
 
 # ── Abuse controls (F4) ───────────────────────────────────────────────────────
@@ -192,10 +185,36 @@ async def request_id_middleware(request: Request, call_next):
     token = request_id_var.set(rid)
     try:
         response = await call_next(request)
-    finally:
-        request_id_var.reset(token)
+    except Exception:
+        # Deliberately no reset on this path. The handler that turns this into a
+        # 500 runs *outside* this middleware, so resetting here would unbind the
+        # id before the one log line that describes the failure is written --
+        # leaving the only request anyone would report as the only request with
+        # no correlation id. The contextvar is task-local, so leaving it set
+        # cannot leak into another request.
+        raise
+    request_id_var.reset(token)
     response.headers["X-Request-ID"] = rid
     return response
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Give unhandled failures the same correlation id every other response gets.
+
+    Without this the 500 is generated above the middleware and carries neither
+    the X-Request-ID header nor an id in its body, so a user reporting "it broke"
+    has nothing to quote and the logs have nothing to search. The exception class
+    is surfaced and the message is not -- same rule the SSE error path follows,
+    since a message can carry internals a caller should not see.
+    """
+    rid = request_id_var.get()
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"type": "error", "error": type(exc).__name__, "request_id": rid},
+        headers={"X-Request-ID": rid},
+    )
 
 app.add_middleware(
     CORSMiddleware,

@@ -372,7 +372,7 @@ class TestRagAgentGrounding:
         monkeypatch.setattr(graph, "llm", _Stub())
         monkeypatch.setattr(graph, "search_foods", lambda q: ["MALTODEXTRIN, 380 kcal"])
 
-        out = graph.rag_agent(self_state := {"messages": [HumanMessage(content="what is maltodextrin")]})
+        out = graph.rag_agent({"messages": [HumanMessage(content="what is maltodextrin")]})
 
         system_text = " ".join(
             m.content for m in captured["messages"] if hasattr(m, "content"))
