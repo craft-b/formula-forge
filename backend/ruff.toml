@@ -1,0 +1,24 @@
+# Static analysis for the backend. CI ran the tests and the eval but nothing
+# read the code, so five dead imports and a duplicated origin parser sat in
+# main.py until a manual pass found them. This is the cheap half of that pass,
+# run on every push.
+line-length = 100
+exclude = ["venv", ".venv", "chroma_db", ".hypothesis", ".pytest_cache"]
+
+[lint]
+# F  — pyflakes: unused imports and variables, undefined names, f-strings
+#      missing placeholders. The class of defect that found main.py.
+# E9 — syntax and IO errors that stop the file being parsed at all.
+# B  — bugbear: mutable default arguments, `except` that swallows, loop-variable
+#      capture in closures. Real bugs rather than style.
+#
+# UP (pyupgrade) is deliberately not selected. It flags 41 sites, all of them
+# `Optional[X]` -> `X | None` and `typing.Dict` -> `dict`. Those are style, not
+# defects, and turning them on would mean a large mechanical diff across files
+# whose annotations are otherwise consistent. Worth doing on purpose one day,
+# not worth failing a build over.
+select = ["F", "E9", "B"]
+
+[lint.per-file-ignores]
+# Tests legitimately assert on expressions and shadow names in fixtures.
+"tests/*" = ["B011"]

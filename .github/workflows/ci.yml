@@ -21,6 +21,14 @@ jobs:
         working-directory: backend
         run: pip install -r requirements-dev.txt
 
+      - name: Lint (ruff)
+        # CI ran the tests and the eval but never read the code. Five dead
+        # imports and a duplicated origin parser lived in main.py through both.
+        # F/E9/B only: unused and undefined names, syntax errors, and bugbear's
+        # real-defect rules. Style modernisation is deliberately not gated.
+        working-directory: backend
+        run: ruff check .
+
       - name: Run tests (unit, domain, gate, golden-set eval)
         working-directory: backend
         env:

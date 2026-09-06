@@ -4,3 +4,6 @@ pytest==8.3.4
 pytest-asyncio==0.24.0
 httpx==0.27.2
 hypothesis==6.122.3
+# Static analysis, pinned so CI and a local run agree on what counts as a
+# finding — an unpinned linter changes the build's verdict with no commit.
+ruff==0.16.6
