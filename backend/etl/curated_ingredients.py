@@ -188,8 +188,11 @@ CURATED_INGREDIENTS: list[dict] = [
     {
         "id": "dextrose_monohydrate", "name": "Dextrose (glucose) monohydrate", "role": "sweetener",
         "fdc_id": None,
+        # Monohydrate: 9 g water of crystallisation per 100 g, so 91 g is
+        # anhydrous dextrose. sugars_g and energy_kcal already reflected that;
+        # carbs_g was left at 100, which put 109 g of matter in 100 g.
         "nutrients_per_100g": {"energy_kcal": 368.0, "protein_g": 0.0, "fat_g": 0.0,
-            "carbs_g": 100.0, "sugars_g": 91.0, "fiber_g": 0.0, "sodium_mg": 0.0,
+            "carbs_g": 91.0, "sugars_g": 91.0, "fiber_g": 0.0, "sodium_mg": 0.0,
             "potassium_mg": 0.0, "phosphorus_mg": 0.0, "calcium_mg": 0.0, "water_g": 9.0},
         "functional": {"pac": 190.0, "pod": 74.0, "fat_type": None,
                        "protein_type": None, "stabilizer_class": None,
@@ -270,8 +273,14 @@ CURATED_INGREDIENTS: list[dict] = [
 
     # ── Eggs (FDC Foundation Foods) ───────────────────────────────────────────
     {
+        # FDC 748236 ("Eggs, Grade A, Large, egg yolk") reports 48 nutrients
+        # and not one mineral, so it built a yolk with phosphorus 0.0 — against
+        # a real value near 400 mg/100 g, on the nutrient the renal ruleset
+        # gates. 329596 is a Foundation Food covering the same ingredient with a
+        # complete vector, which keeps macros and minerals from one record
+        # rather than grafting two together.
         "id": "egg_yolk", "name": "Egg yolk, raw", "role": "egg",
-        "fdc_id": 748236,
+        "fdc_id": 329596,
         "functional": {"pac": 0.0, "pod": 0.0, "fat_type": None,
                        "protein_type": "egg", "stabilizer_class": "emulsifier",
                        "lactose_g": 0.0, "allergens": ["egg"], "cost_per_kg_usd": 7.0},
@@ -288,8 +297,10 @@ CURATED_INGREDIENTS: list[dict] = [
     {
         "id": "locust_bean_gum", "name": "Locust bean gum", "role": "stabilizer",
         "fdc_id": None,
+        # Carbohydrate by difference: 100 - 10 water - 6 protein - 0.6 fat.
+        # Was 88.0, which summed to 104.6 g per 100 g.
         "nutrients_per_100g": {"energy_kcal": 155.0, "protein_g": 6.0, "fat_g": 0.6,
-            "carbs_g": 88.0, "sugars_g": 0.0, "fiber_g": 80.0, "sodium_mg": 5.0,
+            "carbs_g": 83.4, "sugars_g": 0.0, "fiber_g": 80.0, "sodium_mg": 5.0,
             "potassium_mg": 100.0, "phosphorus_mg": 0.0, "calcium_mg": 0.0, "water_g": 10.0},
         "functional": {"pac": 0.0, "pod": 0.0, "fat_type": None,
                        "protein_type": None, "stabilizer_class": "galactomannan",
@@ -298,8 +309,10 @@ CURATED_INGREDIENTS: list[dict] = [
     {
         "id": "guar_gum", "name": "Guar gum", "role": "stabilizer",
         "fdc_id": None,
+        # Carbohydrate by difference: 100 - 10 water - 5 protein - 0.5 fat.
+        # Was 88.0, which summed to 103.5 g per 100 g.
         "nutrients_per_100g": {"energy_kcal": 155.0, "protein_g": 5.0, "fat_g": 0.5,
-            "carbs_g": 88.0, "sugars_g": 0.0, "fiber_g": 80.0, "sodium_mg": 10.0,
+            "carbs_g": 84.5, "sugars_g": 0.0, "fiber_g": 80.0, "sodium_mg": 10.0,
             "potassium_mg": 100.0, "phosphorus_mg": 0.0, "calcium_mg": 0.0, "water_g": 10.0},
         "functional": {"pac": 0.0, "pod": 0.0, "fat_type": None,
                        "protein_type": None, "stabilizer_class": "galactomannan",

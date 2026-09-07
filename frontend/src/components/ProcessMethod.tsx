@@ -12,7 +12,8 @@ interface Step {
   detail: string
 }
 
-export function buildProcessSteps(c: ComputedComposition): Step[] {
+// Pure step derivation, used only by ProcessMethod below.
+function buildProcessSteps(c: ComputedComposition): Step[] {
   const format = c.product_format
   const softServe = format === "soft_serve"
   const novelty = format === "novelty"

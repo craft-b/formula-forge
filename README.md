@@ -255,17 +255,18 @@ model id in use:
   "dependencies": {
     "llm_client":         {"status": "ok", "detail": "API key configured; chat model initialized."},
     "agent_graph":        {"status": "ok", "detail": "Compiled LangGraph agent loaded."},
-    "ingredient_library": {"status": "ok", "detail": "dataset 2026.07.0, 34 ingredients."}
+    "ingredient_library": {"status": "ok", "detail": "dataset 2026.09.0, 34 ingredients."}
   }
 }
 ```
 
-That `model` field is the model this *process* is running, not the repository
-default. The hosted demo sets `GROQ_MODEL=openai/gpt-oss-120b`, which is also the
-model the weekly LLM eval measures — an eval that scored a different model than
-the one serving traffic would be reporting a number nobody is using. The code
-default, and what you get from `.env.example` unchanged, is
-`llama-3.3-70b-versatile`.
+That `model` field is the model this *process* is running, resolved by
+`llm.model_for()` — the same call that builds the client, so the reported id and
+the called id cannot drift apart. The repository default, `.env.example`, the
+hosted demo and the weekly LLM eval all name `openai/gpt-oss-120b`: an eval that
+scored a different model than the one serving traffic would be reporting a number
+nobody is using, and a readiness probe that verified a different one again would
+be checking a model the process never calls.
 
 The probe makes no network call to the LLM provider. Checking readiness by calling Groq
 would bill every uptime check and would take this instance out of rotation during a
@@ -282,7 +283,7 @@ never enters the response.
 |---|---|
 | API | FastAPI 0.136, uvicorn, slowapi, pydantic 2 / pydantic-settings |
 | Orchestration | LangGraph 1.1, langchain-core 1.3 |
-| LLM | Groq — `llama-3.3-70b-versatile` primary, `llama-3.1-8b-instant` fallback via `with_fallbacks` |
+| LLM | Groq — `openai/gpt-oss-120b` primary, `openai/gpt-oss-20b` fallback via `with_fallbacks` |
 | Domain | Pure Python: composition math, constraint evaluator, declarative JSON rulesets |
 | Data | Governed ingredient library built by a versioned ETL from USDA FDC Foundation Foods, plus curated functional properties (PAC/POD, allergens, cost) |
 | Frontend | React 19, TypeScript, Vite, Tailwind v4, shadcn/ui |
@@ -324,7 +325,7 @@ Full annotated list in [`backend/.env.example`](backend/.env.example). The ones 
 | Variable | Default | Purpose |
 |---|---|---|
 | `GROQ_API_KEY` | none | Required. The process exits at startup without it. |
-| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Primary model id. |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | Primary model id. Defined once in `config.py`; `llm.py` and `/health` both read it from there. |
 | `LLM_PROVIDER` | `groq` | `openai` / `anthropic` also require their SDK and `LLM_MODEL`. |
 | `ENABLE_LLM_FALLBACK` | `true` | Composes the fallback model via `with_fallbacks`. |
 | `ALLOWED_ORIGINS` | localhost:5173 + the deployed frontend | Comma-separated CORS allowlist. No wildcard. |
@@ -463,7 +464,7 @@ The system as it stands, measured rather than asserted:
 
 | | |
 |---|---|
-| Governed ingredient library | 34 ingredients, dataset `2026.07.0`, every row with a full nutrient vector and provenance |
+| Governed ingredient library | 34 ingredients, dataset `2026.09.0`, every row with a full nutrient vector and provenance |
 | Model-authored numbers reaching a user | 0, enforced by type and pinned by test |
 | Domain + gate test suite | 231 tests, no live LLM, deterministic in CI |
 | Golden compliance set | 18 brief-to-formula cases, 100% schema-valid, 100% compliance accuracy |

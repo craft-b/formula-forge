@@ -18,5 +18,19 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // Exporting a presentational constant beside its component is normal and
+      // costs only HMR granularity, not correctness.
+      'react-refresh/only-export-components': [
+        'error',
+        { allowConstantExport: true },
+      ],
+    },
+  },
+  {
+    // The Vite entry point mounts the tree and exports nothing by design, so the
+    // component-export rule has nothing meaningful to say about it.
+    files: ['src/main.tsx'],
+    rules: { 'react-refresh/only-export-components': 'off' },
   },
 ])

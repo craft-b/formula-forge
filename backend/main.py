@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
@@ -27,20 +26,13 @@ from graph import (
     iterate_formula,
     regenerate_formula,
 )
-from domain import CandidateFormula, validate_candidate
-from generation import candidate_from_llm as _candidate_from_llm
 from generation import parse_and_validate as _parse_and_validate
-from json_utils import extract_json_block
-from llm import verify_model_available
+from llm import model_for, verify_model_available
 from budget import TokenBudget, estimate_tokens
 from observability import new_request_id, request_id_var, setup_logging
 
 setup_logging(settings.log_level)
 logger = logging.getLogger(__name__)
-
-
-def _parse_origins(raw: str) -> list[str]:
-    return [o.strip() for o in raw.split(",") if o.strip()]
 
 
 # ── Abuse controls (F4) ───────────────────────────────────────────────────────
@@ -192,10 +184,36 @@ async def request_id_middleware(request: Request, call_next):
     token = request_id_var.set(rid)
     try:
         response = await call_next(request)
-    finally:
-        request_id_var.reset(token)
+    except Exception:
+        # Deliberately no reset on this path. The handler that turns this into a
+        # 500 runs *outside* this middleware, so resetting here would unbind the
+        # id before the one log line that describes the failure is written --
+        # leaving the only request anyone would report as the only request with
+        # no correlation id. The contextvar is task-local, so leaving it set
+        # cannot leak into another request.
+        raise
+    request_id_var.reset(token)
     response.headers["X-Request-ID"] = rid
     return response
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Give unhandled failures the same correlation id every other response gets.
+
+    Without this the 500 is generated above the middleware and carries neither
+    the X-Request-ID header nor an id in its body, so a user reporting "it broke"
+    has nothing to quote and the logs have nothing to search. The exception class
+    is surfaced and the message is not -- same rule the SSE error path follows,
+    since a message can carry internals a caller should not see.
+    """
+    rid = request_id_var.get()
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"type": "error", "error": type(exc).__name__, "request_id": rid},
+        headers={"X-Request-ID": rid},
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -265,12 +283,20 @@ def api_ideas():
 def _active_model() -> str:
     """The model id this process will actually call.
 
-    Mirrors `llm._model_for()` — the source of truth — so a non-Groq deployment
-    does not get told it is running a Groq model.
+    Delegates to `llm.model_for` rather than re-deriving from settings. It used
+    to claim it mirrored that function while reading a different default, so with
+    GROQ_MODEL unset the process called one model, /health and /api/meta reported
+    another, and the startup availability check verified the one nobody was
+    calling — the precise blind spot that check exists to close.
+
+    Falls back to "unset" instead of raising: a non-Groq deployment with no
+    LLM_MODEL is a misconfiguration to report through the readiness payload, not
+    a reason for the probe itself to fail.
     """
-    if settings.llm_provider.lower() == "groq":
-        return settings.groq_model
-    return os.getenv("LLM_MODEL") or "unset"
+    try:
+        return model_for(settings.llm_provider)
+    except ValueError:
+        return "unset"
 
 
 def _probe_llm_client() -> dict:
@@ -455,14 +481,14 @@ async def _stream_agent(
 async def chat(request: Request, req: ChatRequest):
     session_id = req.session_id or str(uuid.uuid4())
 
-    # Token budget: reserve an estimate up front so a burst cannot overrun.
+    # Token budget: check and consume in one atomic step, so a burst cannot all
+    # pass the check before any of them consumes (see TokenBudget.reserve).
     est = estimate_tokens(req.message)
-    if not budget.allow(session_id, est):
+    if not budget.reserve(session_id, est):
         return JSONResponse(
             status_code=429,
             content={"error": "Daily token budget exceeded. Please try again tomorrow."},
         )
-    budget.record(session_id, est)
 
     history = list(conversation_store.get(session_id, []))
     history.append(HumanMessage(content=req.message))

@@ -5,7 +5,8 @@
 
 import type { ModuleInfo } from "@/types/meta"
 
-export const FORMATS = [
+// Local to this panel — nothing outside it consumes the format list.
+const FORMATS = [
   { id: "premium", label: "Premium" },
   { id: "standard", label: "Standard" },
   { id: "gelato", label: "Gelato" },

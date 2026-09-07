@@ -12,7 +12,6 @@ import { ProcessMethod } from "./ProcessMethod"
 import type { NutrientVector, RejectedFormula, ValidatedFormula } from "@/types/api"
 import {
   BulletBand,
-  COMPOSITION_COLORS,
   CompositionBar,
   InlineBar,
   LimitRow,
@@ -20,6 +19,7 @@ import {
   StatTile,
   StatusPill,
 } from "./viz"
+import { COMPOSITION_COLORS } from "@/lib/palette"
 
 // Mirrors backend/domain/constants.py bands (single place to update in the UI).
 const PAC_BAND = { lo: 22, hi: 34, domainLo: 0, domainHi: 50 }

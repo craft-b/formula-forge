@@ -52,6 +52,18 @@ class AgentState(TypedDict, total=False):
     modules: Optional[List[str]]
 
 
+# A bare product noun anywhere in the message, and the shapes a question takes.
+# "gelato" on its own is ambiguous — it appears in briefs and in questions alike
+# — so neither of these decides anything by itself; see detect_intent.
+_PRODUCT_NOUN_RE = re.compile(r"\b" + _PRODUCT_NOUN + r"\b", re.IGNORECASE)
+_QUESTION_RE = re.compile(
+    r"(?:\?)|^\s*(?:what|which|how|why|when|who|whose|is|are|was|were|do|does|did"
+    r"|can|could|should|would|will|explain|describe|define|compare|tell\s+me"
+    r"|give\s+me\s+an?\s+(?:overview|explanation)|help\s+me\s+understand)\b",
+    re.IGNORECASE,
+)
+
+
 def detect_intent(message: str) -> Literal["formulate", "search"]:
     """Return routing intent for a user message.
 
@@ -59,8 +71,30 @@ def detect_intent(message: str) -> Literal["formulate", "search"]:
     pattern-match problem, and adding an LLM hop here would cost ~300ms and one
     extra API call on every single message. The regex covers conjugations and
     natural variants the old substring list missed (see _FORMULATION_RE above).
+
+    Second rule, for the terse phrasing operators actually type. _FORMULATION_RE
+    needs a verb ("make me a gelato") or one of the two unambiguous nouns
+    ("renal formula"). It does not fire on "renal gelato", "vegan sorbet",
+    "diabetic ice cream" or "dysphagia ice cream" — a constraint qualifier next
+    to the product, which is a brief and not a question by any reading. Those
+    routed to Q&A, and the eval's own notes call that the dangerous direction:
+    the ruleset never runs, so the formula is validated against nothing and comes
+    back looking clean.
+
+    A bare product noun cannot decide this on its own, because it turns up in
+    plenty of questions ("what is a gelato?", "why is my soft serve icy?"). The
+    disambiguator is a clinical constraint sitting beside it: nobody asks this
+    system a general-knowledge question about a renal gelato. So the message must
+    name a product, activate at least one constraint module, and not be phrased
+    as a question.
     """
-    return "formulate" if _FORMULATION_RE.search(message) else "search"
+    if _FORMULATION_RE.search(message):
+        return "formulate"
+    if (_PRODUCT_NOUN_RE.search(message)
+            and detect_modules(message)
+            and not _QUESTION_RE.search(message)):
+        return "formulate"
+    return "search"
 
 
 # Maps a dietary-constraint module to the phrases that activate it. Keyword-based

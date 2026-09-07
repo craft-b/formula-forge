@@ -30,6 +30,13 @@ DEFAULT_OVERRUN: dict[str, float] = {
     "novelty": 0.30,
 }
 DEFAULT_FORMAT = "standard"
+# Physically admissible overrun. Overrun is the volume fraction of air whipped
+# into the mix, so it cannot be negative, and past ~200% there is more air than
+# dessert. This is a guard on a caller-supplied divisor rather than a quality
+# band: serving mass is RACC / (1 + overrun), so -100% divides by zero and
+# anything below it returns a negative serving — which would silently scale every
+# per-serving nutrient negative and let every clinical ceiling pass.
+OVERRUN_BOUNDS_PCT = (0.0, 200.0)
 
 # ── Physical-plausibility bands (per 100 g mix, w/w) ──────────────────────────
 # Standard ice-cream mix envelope (Goff & Hartel, Ice Cream, 7th ed.).

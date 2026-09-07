@@ -43,7 +43,7 @@ import sys
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 HERE = Path(__file__).resolve().parent
 BACKEND = HERE.parent

@@ -8,17 +8,22 @@ from fastapi.testclient import TestClient
 
 import main
 from budget import TokenBudget, estimate_tokens
-from main import _parse_origins, app
+from config import Settings
+from main import app
 
 
 # ── CORS allowlist ────────────────────────────────────────────────────────────
 
 class TestCorsAllowlist:
-    def test_parse_origins_splits_and_trims(self):
-        assert _parse_origins("a, b ,c") == ["a", "b", "c"]
+    # These exercise Settings.origins, which is what main.ALLOWED_ORIGINS is
+    # built from. main.py previously carried a byte-identical private copy that
+    # nothing called, and these tests covered that copy — so they would have
+    # stayed green while the live parser broke.
+    def test_origins_splits_and_trims(self):
+        assert Settings(allowed_origins="a, b ,c").origins == ["a", "b", "c"]
 
-    def test_parse_origins_drops_empty(self):
-        assert _parse_origins("a,, ,b") == ["a", "b"]
+    def test_origins_drops_empty(self):
+        assert Settings(allowed_origins="a,, ,b").origins == ["a", "b"]
 
     def test_no_wildcard_origin_configured(self):
         assert "*" not in main.ALLOWED_ORIGINS
@@ -26,6 +31,50 @@ class TestCorsAllowlist:
 
 
 # ── Token budget (unit) ───────────────────────────────────────────────────────
+
+class TestReserveIsAtomic:
+    """Admission must not over-admit when callers race.
+
+    `allow` then `record` is check-then-act across two lock acquisitions: every
+    thread can pass the check before any of them consumes. `reserve` does both
+    under one lock, so the cap holds no matter how the callers are scheduled.
+    """
+
+    def _race(self, fn, threads: int, cap: int):
+        import threading
+
+        b = TokenBudget(global_daily=cap, session_daily=cap)
+        barrier = threading.Barrier(threads)
+        granted: list[bool] = []
+        lock = threading.Lock()
+
+        def worker():
+            barrier.wait()          # release everyone at once, maximising overlap
+            ok = fn(b)
+            with lock:
+                granted.append(ok)
+
+        ts = [threading.Thread(target=worker) for _ in range(threads)]
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join()
+        return b, sum(granted)
+
+    def test_reserve_never_exceeds_the_cap_under_contention(self):
+        cap, threads = 10, 60
+        b, admitted = self._race(lambda b: b.reserve("s1", 1), threads=threads, cap=cap)
+        assert admitted == cap, f"admitted {admitted} against a cap of {cap}"
+        assert b.usage("s1") == (cap, cap)
+
+    def test_reserve_consumes_exactly_what_it_admits(self):
+        b = TokenBudget(global_daily=1000, session_daily=1000)
+        assert b.reserve("s1", 400) is True
+        assert b.usage("s1") == (400, 400)
+        # Refused reservations must not consume.
+        assert b.reserve("s1", 700) is False
+        assert b.usage("s1") == (400, 400)
+
 
 class TestTokenBudget:
     def test_estimate_scales_with_length(self):

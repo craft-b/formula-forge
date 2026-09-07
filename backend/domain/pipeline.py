@@ -163,7 +163,11 @@ def validate_candidate(
         repaired = True
 
     # 3. Compute composition deterministically (LLM numbers never enter here).
-    pairs = list(zip(specs, [ln.percentage for ln in resolved]))
+    # strict=True because specs and resolved are kept in lockstep by two separate
+    # appends in the loop above. If they ever diverge, a plain zip would silently
+    # truncate to the shorter one — dropping ingredients from a mass-weighted
+    # computation while the formula still displays them. Wrong numbers, no error.
+    pairs = list(zip(specs, [ln.percentage for ln in resolved], strict=True))
     comp: ComputedComposition = compute_composition(
         pairs, candidate.product_format, overrun_pct)
 

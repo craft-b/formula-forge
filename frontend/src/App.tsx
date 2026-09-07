@@ -245,14 +245,29 @@ function Hero({
 
 // ── App shell ─────────────────────────────────────────────────────────────────
 
+
+// Reads the Idea Stream deep-link once: /app?brief=...&modules=a,b. Returned as
+// plain data so it can seed useState initialisers directly — prefilling during
+// the first render rather than setting state from an effect afterwards, which
+// renders the console empty and then immediately corrects it.
+function deepLink(): { brief: string; modules: string[] } {
+  const params = new URLSearchParams(window.location.search)
+  const mods = params.get("modules")
+  return {
+    brief: params.get("brief") ?? "",
+    modules: mods ? mods.split(",").filter(Boolean) : [],
+  }
+}
+
 export default function App() {
   const [runs, setRuns] = useState<Run[]>([])
-  const [input, setInput] = useState("")
+  const [input, setInput] = useState(() => deepLink().brief)
   const [followUp, setFollowUp] = useState("")
   const [loading, setLoading] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [meta, setMeta] = useState<WorkspaceMeta | null>(null)
-  const [selectedModules, setSelectedModules] = useState<Set<string>>(new Set())
+  const [selectedModules, setSelectedModules] = useState<Set<string>>(
+    () => new Set(deepLink().modules))
   const [format, setFormat] = useState<string>("premium")
   // Below lg the rail is hidden, so the same panel opens as a sheet. Without
   // this the product format and every dietary constraint are unreachable on a
@@ -328,15 +343,13 @@ export default function App() {
     }
   }, [panelOpen])
 
-  // Idea Stream deep-link: /app?brief=...&modules=a,b prefills the console so
-  // a trend concept lands ready to generate (never auto-runs — the user sends).
+  // Idea Stream deep-link: the query is read once as the initial state above,
+  // so the console renders prefilled on the first paint rather than empty and
+  // then corrected. All that is left here is the side effect — tidying the URL
+  // so a reload does not re-apply a brief the user has since edited.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const brief = params.get("brief")
-    const mods = params.get("modules")
-    if (brief) setInput(brief)
-    if (mods) setSelectedModules(new Set(mods.split(",").filter(Boolean)))
-    if (brief || mods) window.history.replaceState(null, "", "/app")
+    const { brief, modules } = deepLink()
+    if (brief || modules.length) window.history.replaceState(null, "", "/app")
   }, [])
 
   // Meta powers the module toggles and evidence strip. Retry with backoff:
