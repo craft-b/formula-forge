@@ -37,19 +37,26 @@ A number that is confidently wrong by 40% is a safety issue, and it is undetecta
 the person most likely to trust it — a reader who cannot recompute it themselves.
 
 So the architecture starts from a constraint rather than a capability: **no
-nutritional, cost or compliance number is model-produced — every one is computed from a
-governed ingredient library.** The model is used for the thing it is genuinely good at,
+nutritional, cost or compliance number in a formulation is model-produced — every one is
+computed from a governed ingredient library.** The model is used for the thing it is genuinely good at,
 proposing plausible ingredient structures, and is given no authority over anything that
 has to be true.
 
 That claim is deliberately narrower than "the model never emits a number". It does emit
-two kinds, and both are handled explicitly rather than wished away:
+three kinds, and each is handled explicitly rather than wished away:
 
 - **Ingredient percentages** are the proposal itself. They are structure, they are
   visible, and every figure derived from them is recomputed by the domain.
 - **Prose** in `formulation_notes` and per-line notes is unverifiable by construction. It
   is rendered as model-authored, visually distinct from computed output, and flagged when
   it contains a quantity the system never calculated.
+- **Answers to questions** (the Q&A path, not formulation) are model prose streamed to
+  the user. The prompt restricts figures to the governed rows retrieved for the question,
+  but a prompt is not a guarantee, so every nutrient quantity in the answer is checked
+  against those rows afterwards ([`backend/grounding.py`](backend/grounding.py)). The UI
+  labels every answer as model-written and names any figure the library did not supply.
+  These numbers are checked, not computed — they are the one place a model-authored
+  figure can reach a user, and it arrives marked as such.
 
 Everything else the model might try to assert is dropped at the boundary — including
 `overrun_pct`, which sets serving size and therefore divides every per-serving value the
@@ -94,7 +101,7 @@ _resolve_formula()  ═══════════════════ TH
 ValidatedFormula (flagged if still non-compliant) | RejectedFormula
   │
   ▼
-SSE events: token | formula | rejection | error | done
+SSE events: token | formula | rejection | grounding | error | done
 ```
 
 A request arrives at `chat()` in [`backend/main.py`](backend/main.py). Middleware attaches
@@ -465,7 +472,8 @@ The system as it stands, measured rather than asserted:
 | | |
 |---|---|
 | Governed ingredient library | 34 ingredients, dataset `2026.10.0`, every row with a full nutrient vector and provenance |
-| Model-authored numbers reaching a user | 0, enforced by type and pinned by test |
+| Model-authored numbers in a formulation | 0, enforced by type and pinned by test |
+| Model-authored numbers in a Q&A answer | checked against the retrieved rows; any unmatched figure is shown as unverified |
 | Domain + gate test suite | 231 tests, no live LLM, deterministic in CI |
 | Golden compliance set | 18 brief-to-formula cases, 100% schema-valid, 100% compliance accuracy |
 | Routing eval | 46 labelled briefs, 100% intent routing, 100% ruleset activation |

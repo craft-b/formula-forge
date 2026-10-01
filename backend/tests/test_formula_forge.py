@@ -442,4 +442,6 @@ class TestRagAgentGrounding:
 
         graph.rag_agent({"messages": [HumanMessage(content="what is unobtainium")]})
         text = " ".join(m.content for m in captured["messages"] if hasattr(m, "content"))
-        assert "No matching foods found" in text
+        assert "No matching ingredients in the governed library" in text
+        # The model is told not to fill the gap from memory or cite a source.
+        assert "do not supply a value from memory" in text

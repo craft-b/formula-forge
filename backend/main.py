@@ -27,6 +27,7 @@ from graph import (
     regenerate_formula,
 )
 from generation import parse_and_validate as _parse_and_validate
+from grounding import has_quantities, ungrounded_quantities
 from llm import model_for, verify_model_available
 from budget import TokenBudget, estimate_tokens
 from observability import new_request_id, request_id_var, setup_logging
@@ -407,6 +408,8 @@ async def _stream_agent(
       {"type": "token",     "content": str}                 — one per RAG token
       {"type": "formula",   "formula": dict, "response": str}
       {"type": "rejection", "rejection": dict, "response": str}
+      {"type": "grounding", "has_quantities": bool, "ungrounded": [str]}
+                                                              — after a RAG answer
       {"type": "error",     "message": str}
       {"type": "done",      "session_id": str}               — always last
     """
@@ -426,6 +429,7 @@ async def _stream_agent(
         else:
             formula_buffer = ""
             streamed_text = ""
+            rag_context: list[str] = []
             is_formula_run = False
             graph_input = {"messages": history, "modules": active_modules}
             if force_formulate:
@@ -455,6 +459,10 @@ async def _stream_agent(
                         content = getattr(messages[-1], "content", "") or ""
                         if content:
                             formula_buffer = content
+                elif kind == "on_chain_end" and (node == "rag_agent" or event.get("name") == "rag_agent"):
+                    output = (event.get("data") or {}).get("output") or {}
+                    if isinstance(output, dict) and output.get("context") is not None:
+                        rag_context = output["context"]
 
             if is_formula_run and formula_buffer:
                 # The validation gate: no path emits LLM numbers to the client.
@@ -463,6 +471,15 @@ async def _stream_agent(
                 for chunk in _emit_and_store(result, session_id, history):
                     yield chunk
             else:
+                # Q&A prose is model-authored and cannot be recomputed, so the
+                # next best thing: say which of its figures the library supplied.
+                if streamed_text:
+                    grounding = {
+                        "type": "grounding",
+                        "has_quantities": has_quantities(streamed_text),
+                        "ungrounded": ungrounded_quantities(streamed_text, rag_context),
+                    }
+                    yield f"data: {json.dumps(grounding)}\n\n"
                 conversation_store[session_id] = history + [AIMessage(content=streamed_text)]
 
     except Exception as exc:

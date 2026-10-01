@@ -84,6 +84,7 @@ export interface RejectedFormula {
 export interface TokenEvent { type: "token"; content: string; }
 export interface FormulaEvent { type: "formula"; formula: ValidatedFormula; response: string; }
 export interface RejectionEvent { type: "rejection"; rejection: RejectedFormula; response: string; }
+export interface GroundingEvent { type: "grounding"; has_quantities: boolean; ungrounded: string[]; }
 export interface ErrorEvent { type: "error"; message: string; }
 export interface DoneEvent { type: "done"; session_id: string; }
-export type SSEEvent = TokenEvent | FormulaEvent | RejectionEvent | ErrorEvent | DoneEvent;
+export type SSEEvent = TokenEvent | FormulaEvent | RejectionEvent | GroundingEvent | ErrorEvent | DoneEvent;

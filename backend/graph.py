@@ -50,6 +50,9 @@ class AgentState(TypedDict, total=False):
     # Active dietary-constraint module ids — rendered into the formula prompt
     # as design targets so proposals aim at the limits the gate will enforce.
     modules: Optional[List[str]]
+    # The governed rows the RAG answer was given. main.py checks every figure in
+    # the answer against these (grounding.py) and tells the UI which were not.
+    context: Optional[List[str]]
 
 
 # A bare product noun anywhere in the message, and the shapes a question takes.
@@ -216,7 +219,7 @@ def route(state: AgentState) -> Literal["formula_agent", "rag_agent"]:
 
 
 def rag_agent(state: AgentState):
-    """Handle ingredient and nutrition questions with USDA context + conversation history.
+    """Handle ingredient and nutrition questions with library context + conversation history.
 
     Passes the last 10 messages to the LLM so follow-up questions ("what about
     the sodium content?") resolve correctly. The window is capped at 10 to stay
@@ -226,19 +229,33 @@ def rag_agent(state: AgentState):
     user_messages = [m for m in state["messages"] if isinstance(m, HumanMessage)]
     user_message = user_messages[-1].content
     foods = search_foods(user_message)
-    context = "\n".join(f"- {f}" for f in foods) if foods else "No matching foods found in USDA database."
+    # Labelled as the governed library, not "USDA": the library mixes FDC rows
+    # with curated ones, and the old label invited the model to cite USDA for
+    # figures it had made up.
+    context = ("\n".join(f"- {f}" for f in foods) if foods
+               else "No matching ingredients in the governed library.")
 
     system = SystemMessage(content="""You are FormulaForge, an AI food formulation assistant.
 You help food scientists, chefs, and product developers with ingredient selection,
 nutrition analysis, and recipe formulation. Be concise, specific, and practical.
-Reference conversation history when relevant.""")
+Reference conversation history when relevant.
+
+Nutrient figures: state a number ONLY if it appears in the governed ingredient
+rows provided below, and give it per 100 g as written there. If the question asks
+about a nutrient or an ingredient those rows do not include, say plainly that it
+is not in FormulaForge's governed library — do not supply a value from memory, do
+not attribute a value to USDA or any other source, and do not compute daily-value
+percentages. Every figure you write is checked against the rows, and any that do
+not match are shown to the user as unverified.""")
 
     # Include last 10 messages so the LLM sees conversation context
     history = state["messages"][-10:]
-    context_note = SystemMessage(content=f"Relevant USDA foods for this query:\n{context}")
+    context_note = SystemMessage(
+        content=f"Governed ingredient library rows for this query (per 100 g):\n{context}")
 
     response = llm.invoke([system, context_note] + history)
-    return {"messages": state["messages"] + [AIMessage(content=response.content)]}
+    return {"messages": state["messages"] + [AIMessage(content=response.content)],
+            "context": foods}
 
 
 _FORMULA_SYSTEM = SystemMessage(content="""You are FormulaForge, an expert frozen-dessert \

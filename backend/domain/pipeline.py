@@ -86,6 +86,11 @@ _SERVING_CLAIM = re.compile(
 
 _NUMERIC_CLAIM = _NUTRIENT_QUANTITY  # kept for callers that import the name
 
+# Public names for the Q&A grounding check (grounding.py), which must agree with
+# this module about what counts as a nutrient claim.
+NUTRIENT_QUANTITY_RE = _NUTRIENT_QUANTITY
+SERVING_CLAIM_RE = _SERVING_CLAIM
+
 
 def _has_numeric_claim(*texts: str) -> bool:
     """Whether model-authored prose asserts a quantity.
