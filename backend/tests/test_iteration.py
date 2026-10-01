@@ -61,6 +61,24 @@ class TestDetectIteration:
     def test_non_iteration_phrases(self, msg):
         assert detect_iteration(msg) is False
 
+    @pytest.mark.parametrize("msg", [
+        # Live repro (review H4): "more" made this an iteration, and the user
+        # got the same formula back instead of an answer.
+        "Why does this formula use more cream than a standard recipe?",
+        "What would happen if I add more stabilizer?",
+        "Is it possible to keep the sugar this low?",
+        "how does the cream affect overrun?",
+    ])
+    def test_questions_about_the_formula_are_not_iterations(self, msg):
+        assert detect_iteration(msg) is False
+
+    @pytest.mark.parametrize("msg", [
+        "Can you make it sweeter?", "could we swap the cream for coconut cream?",
+        "please reduce the sodium", "swap the cream?", "Would you lower the fat?",
+    ])
+    def test_change_requests_phrased_as_questions_still_iterate(self, msg):
+        assert detect_iteration(msg) is True
+
 
 # ── Iteration routing carries parent context ──────────────────────────────────
 

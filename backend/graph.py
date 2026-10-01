@@ -162,9 +162,31 @@ _ITERATION_RE = re.compile(
 )
 
 
+# A request phrased as a question is still a request: "can you make it
+# sweeter?", "could we swap the cream?". So is a message that opens with the
+# change itself ("swap the cream?"). Neither is a question about the formula.
+_CHANGE_REQUEST_RE = re.compile(
+    r"^\s*(?:please\s+|(?:can|could|would|will)\s+(?:you|we)\s+(?:please\s+)?)?"
+    r"(?:now\s+)?(?:make|reduce|lower|increase|raise|bump|swap|replace|substitute"
+    r"|hold|keep|remove|drop|cut|add|try|use)\b",
+    re.I,
+)
+
+
 def detect_iteration(message: str) -> bool:
-    """True if the message reads as a modification of an existing formula."""
-    return bool(_ITERATION_RE.search(message))
+    """True if the message reads as a modification of an existing formula.
+
+    The change vocabulary is broad on purpose (a false positive only means
+    "treat this as a tweak"), which is exactly why questions need excluding:
+    "why does this formula use more cream?" contains "more" and was rewritten
+    into a new formula instead of being answered. A question-shaped message is
+    an iteration only when it is a change request in question form.
+    """
+    if not _ITERATION_RE.search(message):
+        return False
+    if _QUESTION_RE.search(message) and not _CHANGE_REQUEST_RE.search(message):
+        return False
+    return True
 
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
