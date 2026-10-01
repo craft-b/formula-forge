@@ -479,6 +479,27 @@ The system as it stands, measured rather than asserted:
 | Routing eval | 46 labelled briefs, 100% intent routing, 100% ruleset activation |
 | Repairs per request | at most 1, structurally — `_resolve_formula()` has no loop |
 
+And the half that is not deterministic. The live eval's recorded baseline
+(`eval/baseline.json`: 46 briefs, `openai/gpt-oss-120b`, 2026-09-04), each rate with
+its Wilson 95% interval:
+
+| Live generation metric | Rate | 95% CI | n |
+|---|---:|---|---:|
+| Provider answered (429s and timeouts excluded below) | 95% | 84–99% | 39/41 |
+| Output parsed into a candidate | 95% | 83–99% | 37/39 |
+| Every ingredient resolved to the governed library | 100% | 91–100% | 37/37 |
+| Cleared validation with no repair | 76% | 61–87% | 29/38 |
+| Of those that failed, recovered by the one repair | 86% | 49–97% | 6/7 |
+| Designed to the active limits rather than rescued by the gate | 73% | 56–85% | 24/33 |
+| Formulation notes free of unverified quantities | 0% | 0–9% | 0/37 |
+| Unsatisfiable briefs that did not yield a passing formula | 100% | 21–100% | 1/1 |
+
+Two of those deserve a plain reading. A quarter of first attempts fail validation, which
+is the gate doing its job rather than the model doing it. And the model writes a quantity
+into its notes essentially every time — which is why that prose is labelled model-authored
+and flagged in the UI rather than trusted. The baseline predates dataset `2026.10.0` and
+the Q&A grounding check, so it does not yet reflect either.
+
 None of that says the formulas are good. It says every number attached to one was computed
 from a governed source, that the arithmetic is checked, and that a failure is reported as a
 failure. The thing this project is actually a claim about is the boundary, not the recipes:
@@ -507,7 +528,7 @@ been reading one as the other. The pattern is consistent enough to be a design
 rule now: make the failure loud, or you will not learn about it from the system.
 
 **Documentation drifts faster than you expect, and it drifts in your favour.** The
-"deliberately not built" list above named the generation-quality eval as the highest-value
+"deliberately not built" list below named the generation-quality eval as the highest-value
 missing piece for some weeks after that eval was built and running in CI, forty lines
 further up the same file. `docs/AUDIT_FINDINGS.md` sat in the repository describing, in the
 present tense, a version of the product that three months of commits had already replaced.
@@ -544,14 +565,6 @@ meter; exact provider usage metadata would fix it.
 over the governed library. It handles the ingredient-lookup case it is used for and avoids
 an embedding-model cold start on a free tier, but it does not do synonymy or paraphrase.
 
-**A recorded baseline for the live eval.** `eval/live_eval.py` scores generation quality
-— schema validity, grounding in the governed library, first-pass gate rate, repair
-recovery, constraint targeting — and the weekly workflow runs it. But `eval/baseline.json`
-currently holds only the offline routing run (`"mode": "offline"`), so the live half
-computes its rates with nothing to compare them against. Until a full 46-brief run is
-recorded with `--update-baseline`, the live gate reports numbers rather than gating on
-them, and the repair cap's one-retry rationale stays reasoned rather than measured.
-
 **IDDSI texture compliance.** The `dysphagia_iddsi` module is a declared stub. It advises
 and never fails, and says so in its own violation message and in `/api/meta`. Texture-modified
 diets need rheological measurement the composition model does not currently produce, and
@@ -567,3 +580,7 @@ works — physical plausibility first, then dietary limits, with the distinction
 measured value and an estimated one kept visible throughout.
 
 [LinkedIn](https://linkedin.com/in/craft-bobby-5739b6) · [GitHub](https://github.com/craft-b/formula-forge)
+
+## License
+
+MIT — see [LICENSE](LICENSE).
