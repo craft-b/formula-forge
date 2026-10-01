@@ -23,9 +23,26 @@ from config import DEFAULT_FALLBACK_MODEL, DEFAULT_GROQ_MODEL  # noqa: F401
 
 DEFAULT_TEMPERATURE = 0.3
 
+# Every provider call is bounded. The SDK defaults were no timeout at all, so a
+# provider that accepted the connection and never answered held the request -
+# and its SSE stream - open indefinitely. A formula prompt carrying the whole
+# library returns in a few seconds; 30 s is generous for that and short enough
+# that a stalled call fails into the fallback model instead of hanging. One
+# retry, not the SDK's two: each retry repeats that full prompt.
+DEFAULT_TIMEOUT_S = 30.0
+DEFAULT_MAX_RETRIES = 1
+
+
+def _call_limits() -> dict:
+    return {
+        "timeout": float(os.getenv("LLM_TIMEOUT_S", DEFAULT_TIMEOUT_S)),
+        "max_retries": int(os.getenv("LLM_MAX_RETRIES", DEFAULT_MAX_RETRIES)),
+    }
+
+
 def _build_groq(model: str, temperature: float):
     from langchain_groq import ChatGroq
-    return ChatGroq(model=model, temperature=temperature)
+    return ChatGroq(model=model, temperature=temperature, **_call_limits())
 
 
 def _build_openai(model: str, temperature: float):
@@ -35,7 +52,7 @@ def _build_openai(model: str, temperature: float):
         raise RuntimeError(
             "LLM_PROVIDER=openai requires `pip install langchain-openai` and OPENAI_API_KEY."
         ) from exc
-    return ChatOpenAI(model=model, temperature=temperature)
+    return ChatOpenAI(model=model, temperature=temperature, **_call_limits())
 
 
 def _build_anthropic(model: str, temperature: float):
@@ -45,7 +62,7 @@ def _build_anthropic(model: str, temperature: float):
         raise RuntimeError(
             "LLM_PROVIDER=anthropic requires `pip install langchain-anthropic` and ANTHROPIC_API_KEY."
         ) from exc
-    return ChatAnthropic(model=model, temperature=temperature)
+    return ChatAnthropic(model=model, temperature=temperature, **_call_limits())
 
 
 # Provider registry (the adapter table). Extend here to add a provider.

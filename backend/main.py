@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import uuid
@@ -419,11 +420,15 @@ async def _stream_agent(
     try:
         if iteration_parent is not None:
             # Modify the existing formula from the delta request (F7).
-            raw = iterate_formula(user_message, iteration_parent,
-                                  modules=active_modules)
-            result = _resolve_formula(raw, active_modules, user_message,
-                                      parent=iteration_parent,
-                                      product_format=product_format)
+            # Both calls reach the provider synchronously (the repair inside
+            # _resolve_formula too), so they run in a worker thread. Called
+            # inline they held the event loop for the whole round trip and
+            # every other request on the instance - /health included - waited.
+            raw = await asyncio.to_thread(iterate_formula, user_message, iteration_parent,
+                                          modules=active_modules)
+            result = await asyncio.to_thread(_resolve_formula, raw, active_modules,
+                                             user_message, parent=iteration_parent,
+                                             product_format=product_format)
             for chunk in _emit_and_store(result, session_id, history):
                 yield chunk
         else:
@@ -466,8 +471,11 @@ async def _stream_agent(
 
             if is_formula_run and formula_buffer:
                 # The validation gate: no path emits LLM numbers to the client.
-                result = _resolve_formula(formula_buffer, active_modules, user_message,
-                                          product_format=product_format)
+                # In a thread for the same reason: a failed first attempt
+                # makes a synchronous repair call.
+                result = await asyncio.to_thread(_resolve_formula, formula_buffer,
+                                                 active_modules, user_message,
+                                                 product_format=product_format)
                 for chunk in _emit_and_store(result, session_id, history):
                     yield chunk
             else:
