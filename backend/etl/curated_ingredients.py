@@ -37,6 +37,8 @@ CURATED_INGREDIENTS: list[dict] = [
     {
         "id": "cream_heavy", "name": "Cream, heavy (36% fat)", "role": "dairy_fat",
         "fdc_id": 2346386,
+        # FDC record has no sugars row; unsweetened dairy sugar is its lactose.
+        "nutrient_overrides": {"sugars_g": 2.8},
         "functional": {"pac": 0.0, "pod": 0.0, "fat_type": "dairy",
                        "protein_type": "dairy_mixed", "stabilizer_class": None,
                        "lactose_g": 2.8, "allergens": ["milk"], "cost_per_kg_usd": 6.5},
@@ -55,6 +57,8 @@ CURATED_INGREDIENTS: list[dict] = [
     {
         "id": "milk_skim", "name": "Milk, nonfat / skim", "role": "dairy_base",
         "fdc_id": 322559,
+        # FDC record has no sugars row; unsweetened dairy sugar is its lactose.
+        "nutrient_overrides": {"sugars_g": 5.0},
         "functional": {"pac": 0.0, "pod": 0.0, "fat_type": None,
                        "protein_type": "dairy_mixed", "stabilizer_class": None,
                        "lactose_g": 5.0, "allergens": ["milk"], "cost_per_kg_usd": 1.0},
@@ -62,6 +66,8 @@ CURATED_INGREDIENTS: list[dict] = [
     {
         "id": "milk_2pct", "name": "Milk, reduced fat, 2%", "role": "dairy_base",
         "fdc_id": 321359,
+        # FDC record has no sugars row; unsweetened dairy sugar is its lactose.
+        "nutrient_overrides": {"sugars_g": 4.9},
         "functional": {"pac": 0.0, "pod": 0.0, "fat_type": "dairy",
                        "protein_type": "dairy_mixed", "stabilizer_class": None,
                        "lactose_g": 4.9, "allergens": ["milk"], "cost_per_kg_usd": 1.05},
@@ -69,6 +75,8 @@ CURATED_INGREDIENTS: list[dict] = [
     {
         "id": "buttermilk_lowfat", "name": "Buttermilk, low fat", "role": "dairy_base",
         "fdc_id": 2259792,
+        # FDC record has no sugars row; unsweetened dairy sugar is its lactose.
+        "nutrient_overrides": {"sugars_g": 4.8},
         "functional": {"pac": 0.0, "pod": 0.0, "fat_type": "dairy",
                        "protein_type": "dairy_mixed", "stabilizer_class": None,
                        "lactose_g": 4.8, "allergens": ["milk"], "cost_per_kg_usd": 1.4},
@@ -76,6 +84,8 @@ CURATED_INGREDIENTS: list[dict] = [
     {
         "id": "butter_unsalted", "name": "Butter, unsalted", "role": "dairy_fat",
         "fdc_id": 789828,
+        # FDC record has no sugars row; unsweetened dairy sugar is its lactose.
+        "nutrient_overrides": {"sugars_g": 0.1},
         "functional": {"pac": 0.0, "pod": 0.0, "fat_type": "dairy",
                        "protein_type": "dairy_mixed", "stabilizer_class": None,
                        "lactose_g": 0.1, "allergens": ["milk"], "cost_per_kg_usd": 8.0},
@@ -83,6 +93,8 @@ CURATED_INGREDIENTS: list[dict] = [
     {
         "id": "cream_cheese", "name": "Cream cheese, full fat", "role": "dairy_fat",
         "fdc_id": 2346385,
+        # FDC record has no sugars row; unsweetened dairy sugar is its lactose.
+        "nutrient_overrides": {"sugars_g": 3.0},
         "functional": {"pac": 0.0, "pod": 0.0, "fat_type": "dairy",
                        "protein_type": "dairy_mixed", "stabilizer_class": None,
                        "lactose_g": 3.0, "allergens": ["milk"], "cost_per_kg_usd": 7.0},
@@ -127,6 +139,8 @@ CURATED_INGREDIENTS: list[dict] = [
     {
         "id": "almond_milk_unsweetened", "name": "Almond milk, unsweetened", "role": "base",
         "fdc_id": 2257045,
+        # FDC record has no sugars row; unsweetened, so none added.
+        "nutrient_overrides": {"sugars_g": 0.0},
         "functional": {"pac": 0.0, "pod": 0.0, "fat_type": "vegetable",
                        "protein_type": None, "stabilizer_class": None,
                        "lactose_g": 0.0, "allergens": ["tree_nut"], "cost_per_kg_usd": 2.0},
@@ -281,6 +295,8 @@ CURATED_INGREDIENTS: list[dict] = [
         # rather than grafting two together.
         "id": "egg_yolk", "name": "Egg yolk, raw", "role": "egg",
         "fdc_id": 329596,
+        # FDC record has no sugars row; USDA SR Legacy 01125.
+        "nutrient_overrides": {"sugars_g": 0.56},
         "functional": {"pac": 0.0, "pod": 0.0, "fat_type": None,
                        "protein_type": "egg", "stabilizer_class": "emulsifier",
                        "lactose_g": 0.0, "allergens": ["egg"], "cost_per_kg_usd": 7.0},
@@ -288,6 +304,8 @@ CURATED_INGREDIENTS: list[dict] = [
     {
         "id": "egg_whole", "name": "Egg, whole, raw", "role": "egg",
         "fdc_id": 748967,
+        # FDC record has no sugars row; USDA SR Legacy 01123.
+        "nutrient_overrides": {"sugars_g": 0.37},
         "functional": {"pac": 0.0, "pod": 0.0, "fat_type": None,
                        "protein_type": "egg", "stabilizer_class": "emulsifier",
                        "lactose_g": 0.0, "allergens": ["egg"], "cost_per_kg_usd": 3.5},

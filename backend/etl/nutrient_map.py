@@ -31,8 +31,10 @@ ENERGY_NUMBERS: tuple[str, ...] = ("1008", "2048", "2047")
 # Foundation Foods omit a macro row entirely (e.g. butter has no protein row).
 # Water is never zero-defaulted — it is required for total-solids math and its
 # absence signals a genuinely malformed source record.
+#
+# sugars_g is deliberately absent: see RULESET_GATED_FIELDS below.
 DEFAULT_ZERO_FIELDS: frozenset[str] = frozenset(
-    {"protein_g", "fat_g", "carbs_g", "sugars_g", "fiber_g"}
+    {"protein_g", "fat_g", "carbs_g", "fiber_g"}
 )
 
 # The minerals the clinical rulesets gate on. "Absent" and "zero" are different
@@ -49,6 +51,15 @@ DEFAULT_ZERO_FIELDS: frozenset[str] = frozenset(
 CLINICAL_MINERAL_FIELDS: frozenset[str] = frozenset(
     {"sodium_mg", "potassium_mg", "phosphorus_mg", "calcium_mg"}
 )
+
+# Every field a ruleset gates on, where a guessed zero errs toward compliance.
+# Total sugars joined the minerals after the same failure: five FDC dairy
+# records (heavy cream, skim, 2 %, buttermilk, cream cheese) report carbohydrate
+# but no sugars row, so they shipped with 0.0 g sugars while their own curated
+# lactose_g said 2.8-5.0 g. The diabetic ruleset caps sugars per serving, and a
+# skim-based formula at ~8.7 g passed as ~5.2 g. An FDC row missing one of these
+# must carry an explicit `nutrient_overrides` entry, or the build stops.
+RULESET_GATED_FIELDS: frozenset[str] = CLINICAL_MINERAL_FIELDS | {"sugars_g"}
 
 # Canonical nutrient field order for the governed dataset.
 NUTRIENT_FIELDS: tuple[str, ...] = (

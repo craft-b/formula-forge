@@ -1,7 +1,7 @@
 {
-  "dataset_version": "2026.09.0",
-  "transform_version": "etl-1.0.0",
-  "built": "2026-09-06",
+  "dataset_version": "2026.10.0",
+  "transform_version": "etl-1.1.0",
+  "built": "2026-10-01",
   "source": "USDA FoodData Central Foundation Foods (nutrients) + curated functional properties (PAC/POD). See etl/curated_ingredients.py.",
   "ingredient_count": 34,
   "ingredients": [
@@ -14,7 +14,7 @@
         "protein_g": 2.02,
         "fat_g": 35.56,
         "carbs_g": 3.8,
-        "sugars_g": 0.0,
+        "sugars_g": 2.8,
         "fiber_g": 0.0,
         "sodium_mg": 20.6,
         "potassium_mg": 96.9,
@@ -38,8 +38,11 @@
         "source": "FDC_foundation_food",
         "fdc_id": 2346386,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [
+          "sugars_g"
+        ],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -75,8 +78,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -88,7 +92,7 @@
         "protein_g": 3.43,
         "fat_g": 0.08,
         "carbs_g": 4.89,
-        "sugars_g": 0.0,
+        "sugars_g": 5.0,
         "fiber_g": 0.0,
         "sodium_mg": 41.0,
         "potassium_mg": 167.0,
@@ -112,8 +116,11 @@
         "source": "FDC_foundation_food",
         "fdc_id": 322559,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [
+          "sugars_g"
+        ],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -125,7 +132,7 @@
         "protein_g": 3.35,
         "fat_g": 1.9,
         "carbs_g": 4.91,
-        "sugars_g": 0.0,
+        "sugars_g": 4.9,
         "fiber_g": 0.0,
         "sodium_mg": 39.0,
         "potassium_mg": 159.0,
@@ -149,8 +156,11 @@
         "source": "FDC_foundation_food",
         "fdc_id": 321359,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [
+          "sugars_g"
+        ],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -162,7 +172,7 @@
         "protein_g": 3.46,
         "fat_g": 1.08,
         "carbs_g": 4.81,
-        "sugars_g": 0.0,
+        "sugars_g": 4.8,
         "fiber_g": 0.0,
         "sodium_mg": 92.5,
         "potassium_mg": 158.0,
@@ -186,8 +196,11 @@
         "source": "FDC_foundation_food",
         "fdc_id": 2259792,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [
+          "sugars_g"
+        ],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -199,7 +212,7 @@
         "protein_g": 0.0,
         "fat_g": 81.5,
         "carbs_g": 0.0,
-        "sugars_g": 0.0,
+        "sugars_g": 0.1,
         "fiber_g": 0.0,
         "sodium_mg": 10.0,
         "potassium_mg": 19.0,
@@ -223,8 +236,11 @@
         "source": "FDC_foundation_food",
         "fdc_id": 789828,
         "energy_atwater_derived": true,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [
+          "sugars_g"
+        ],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -236,7 +252,7 @@
         "protein_g": 5.79,
         "fat_g": 33.49,
         "carbs_g": 4.56,
-        "sugars_g": 0.0,
+        "sugars_g": 3.0,
         "fiber_g": 0.0,
         "sodium_mg": 367.8,
         "potassium_mg": 124.8,
@@ -260,8 +276,11 @@
         "source": "FDC_foundation_food",
         "fdc_id": 2346385,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [
+          "sugars_g"
+        ],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -297,8 +316,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -334,8 +354,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -371,8 +392,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -408,8 +430,11 @@
         "source": "FDC_foundation_food",
         "fdc_id": 2257045,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [
+          "sugars_g"
+        ],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -443,8 +468,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -480,8 +506,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -515,8 +542,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -550,8 +578,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -585,8 +614,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -620,8 +650,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -655,8 +686,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -690,8 +722,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -725,8 +758,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -760,8 +794,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -795,8 +830,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -830,8 +866,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -865,8 +902,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -878,7 +916,7 @@
         "protein_g": 15.6,
         "fat_g": 25.1,
         "carbs_g": 0.59,
-        "sugars_g": 0.0,
+        "sugars_g": 0.56,
         "fiber_g": 0.0,
         "sodium_mg": 66.0,
         "potassium_mg": 102.0,
@@ -902,8 +940,11 @@
         "source": "FDC_foundation_food",
         "fdc_id": 329596,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [
+          "sugars_g"
+        ],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -915,7 +956,7 @@
         "protein_g": 12.4,
         "fat_g": 9.96,
         "carbs_g": 0.96,
-        "sugars_g": 0.0,
+        "sugars_g": 0.37,
         "fiber_g": 0.0,
         "sodium_mg": 129.0,
         "potassium_mg": 132.0,
@@ -939,8 +980,11 @@
         "source": "FDC_foundation_food",
         "fdc_id": 748967,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [
+          "sugars_g"
+        ],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -974,8 +1018,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -1009,8 +1054,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -1044,8 +1090,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -1079,8 +1126,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -1114,8 +1162,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -1149,8 +1198,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -1184,8 +1234,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     },
     {
@@ -1219,8 +1270,9 @@
         "source": "curated",
         "fdc_id": null,
         "energy_atwater_derived": false,
-        "dataset_version": "2026.09.0",
-        "transform_version": "etl-1.0.0"
+        "curated_overrides": [],
+        "dataset_version": "2026.10.0",
+        "transform_version": "etl-1.1.0"
       }
     }
   ]
