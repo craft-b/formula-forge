@@ -32,13 +32,18 @@ _FORMULATION_RE = re.compile(
     r"\s+(?:me\s+)?(?:an?|some)?(?:\s+[\w-]+){0,4}\s+" + _PRODUCT_NOUN +
     r"|new\s+" + _PRODUCT_NOUN +
     r"|" + _PRODUCT_NOUN + r"\s+for\b"
-    # Bare noun, no verb: operators type "renal formula" and "vegan formula
-    # please". Restricted to the unambiguous nouns — a bare "dessert" turns up
-    # in plenty of questions, but nobody asks this system "what is a formula".
-    r"|formulations?|formulas?"
     r")",
     re.IGNORECASE,
 )
+
+# Bare noun, no verb: operators type "renal formula" and "vegan formula
+# please". Restricted to the unambiguous nouns — a bare "dessert" turns up in
+# plenty of questions. It used to sit inside _FORMULATION_RE and so fired on
+# questions too, and after a first formula the natural follow-up is a question
+# about "this formula": "why does this formula use more cream?" was sent to the
+# formulator and came back as a new formula. detect_intent now applies it only
+# to messages that are not phrased as questions.
+_BARE_FORMULA_RE = re.compile(r"\b(?:formulations?|formulas?)\b", re.IGNORECASE)
 
 
 class AgentState(TypedDict, total=False):
@@ -92,6 +97,8 @@ def detect_intent(message: str) -> Literal["formulate", "search"]:
     as a question.
     """
     if _FORMULATION_RE.search(message):
+        return "formulate"
+    if _BARE_FORMULA_RE.search(message) and not _QUESTION_RE.search(message):
         return "formulate"
     if (_PRODUCT_NOUN_RE.search(message)
             and detect_modules(message)

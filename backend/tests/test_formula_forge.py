@@ -171,6 +171,20 @@ class TestDetectIntent:
     def test_bare_product_noun_alone_does_not_force_formulation(self, message):
         assert detect_intent(message) == "search"
 
+    # Follow-up questions name "this formula" constantly. The bare-noun rule
+    # used to send every one of them to the formulator (review H4).
+    @pytest.mark.parametrize("message", [
+        "Why does this formula use more cream than a standard recipe?",
+        "What is the phosphorus in this formula?",
+        "how does the formulation stay scoopable?",
+    ])
+    def test_questions_about_a_formula_stay_questions(self, message):
+        assert detect_intent(message) == "search"
+
+    @pytest.mark.parametrize("message", ["renal formula please", "vegan formula"])
+    def test_bare_formula_brief_still_formulates(self, message):
+        assert detect_intent(message) == "formulate"
+
 
 # ── Food search ───────────────────────────────────────────────────────────────
 
