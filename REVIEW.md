@@ -34,6 +34,7 @@ Effort: XS < 30 min, S < 2 h, M < 1 day.
 | H7 | High | Claims / honest results | `README.md:539-545` vs `backend/eval/baseline.json` (`"mode": "live"`, 2026-09-04, 46 cases) | README says the baseline holds only an offline run and the live gate has nothing to compare against. A full live baseline exists, and "What it comes to" omits its results: first-pass gate 29/38 (76 %), repair recovery 6/7, constraint targeting 24/33 (73 %), schema-valid 37/39, **prose free of numeric claims 0/37**. | Replace the stale paragraph; add the live rates, with their Wilson intervals, to "What it comes to." Honest mid-range numbers read as more credible than a column of 100 %. | S |
 | H8 | High | Retrieval quality | `backend/graph.py:191-202`; queries below (§3.2) | Keyword scoring has no stopword or role awareness: "ice cream" matches every cream row and "low" matches "low fat". "Which sweetener is best for a diabetic ice cream?" returns coconut cream, cream cheese, heavy cream and dextrose — no erythritol, allulose or sucralose. "Low-phosphorus protein source" ranks low-fat buttermilk first. | Drop stopwords and product nouns from the query, score `role` matches (e.g. "sweetener" → role `sweetener`) above name tokens, add a small synonym map; pin the five queries in a test. | S |
 | H9 | High | Dependencies | `npm audit` → 15 vulns (9 high); `frontend/package.json:21` | Direct: `vite` 8.0.x (GHSA-fx2h-pf6j-xcff, GHSA-v6wh-96g9-6wx3) and `postcss`. The rest (express, hono, qs, …) arrive via the `shadcn` **CLI** listed as a runtime dependency, used only for `@import "shadcn/tailwind.css"` (`src/index.css:3`). None reach the browser bundle, but the audit output is what a reviewer sees. | `npm audit fix` for vite/postcss; move `shadcn` to `devDependencies`; re-run lint + build. | S |
+| H10 | High | Error handling | `backend/graph.py` `_invoke_formula`; server log `groq.BadRequestError: 400 json_validate_failed` | *Found during Phase 5 verification.* When Groq rejects JSON-mode output server-side (400 `json_validate_failed`), the exception escaped the formula node: the user saw "encountered an error (BadRequestError)" and the one repair the design promises for a malformed proposal never ran. Plausibly the live baseline's 2/39 unparsed outputs. | Treat that specific refusal as an unparseable attempt so it takes the repair; let every other provider error raise. | S |
 | M1 | Medium | Dependencies | `pip-audit -r requirements-dev.txt` | `langsmith==0.8.3` CVE-2026-59152 (runtime; fixed 0.8.18); `pytest==8.3.4` PYSEC-2026-1845 (dev; fixed 9.0.3). | Bump both; re-run the suite. | XS |
 | M2 | Medium | Semantic | `backend/main.py:262` vs `:283-299` | `/api/meta` reports `settings.groq_model`; `/health` reports `_active_model()`. With a non-Groq provider they disagree — the exact drift the `_active_model` docstring says was fixed. | Return `_active_model()` from `/api/meta`. | XS |
 | M3 | Medium | Config | `backend/.env.example`; `backend/llm.py:36, 46, 111`; `backend/config.py:448`; `frontend/src/App.tsx:9` | `.env.example` omits `LOG_LEVEL`, `VERIFY_MODEL_ON_STARTUP`, `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`. The frontend has no `.env.example`; without `VITE_API_URL` every request goes to `undefined/api/...` and fails silently as "Could not reach the server." | Add the missing variables with placeholders; add `frontend/.env.example`. | XS |
@@ -109,3 +110,49 @@ Not verified: the Docker build (Docker is not installed on the review machine); 
 8. **H8** — retrieval stopwords and role scoring.
 9. **M2–M5, L1, L4, L5** — small correctness and hygiene items.
 10. **B3** — you redeploy once `main` has the above (Q6).
+
+## 6. Fix status
+
+Approved 2026-10-01: fix all findings, both halves of B2, leave history (L6), skip the
+formatter (M6). Every commit that touched code was followed by the full suite, ruff, the
+offline routing eval, and (for frontend changes) eslint and a production build.
+
+| ID | Status | Commit | Notes |
+|---|---|---|---|
+| B1 | Fixed | `709ac5a` | Dataset rebuilt from the FDC CSVs as **`2026.10.0`** (planned `2026.09.1`; date-versioned to the rebuild). Only `sugars_g` and provenance changed. Golden set and routing eval still 100 %. |
+| B2 | Fixed | `3a45ebd` | Grounded prompt, server-side figure check, UI label, scoped README claim. Re-run live: both out-of-library questions now answer "not in the governed library"; the in-library one is reported grounded. |
+| B3 | **Open — needs you** | — | Redeploy Render from `main` after merge; set `APP_VERSION` to the commit SHA and `FORWARDED_ALLOW_IPS=*` (see H5). |
+| H1 | Fixed | `1cf1e3a` | Captured from the local stack on `2026.10.0`. |
+| H2 | Fixed | `0460d23` | `/health` regression test fails at 1.03 s with the inline calls restored. |
+| H3 | Fixed | `0460d23` | 30 s / 1 retry, `LLM_TIMEOUT_S` / `LLM_MAX_RETRIES`. |
+| H4 | Fixed | `a99ef88`, `05e658d` | The second commit fixes a second cause found while verifying in the browser: the bare-noun "formula" rule also routed questions to the formulator. Routing eval still 46/46. |
+| H5 | Fixed | `5a296da` | Per-address cap `CLIENT_DAILY_TOKENS` (200 k). Needs `FORWARDED_ALLOW_IPS=*` on Render to be per-caller rather than shared. |
+| H6 | Fixed | `344152a` | 408 tests. |
+| H7 | Fixed | `522be2c` | Live baseline table added; note that it predates `2026.10.0` and the Q&A check. |
+| H8 | Fixed | `2a3c512` | The five review queries pinned in `TestSearchRelevance`. |
+| H9 | Fixed | `4271e8f` | `npm audit`: 0. Linux native bindings for the new rolldown/lightningcss are in the lockfile; Linux `npm ci` not run locally (no WSL distro) — CI will confirm. |
+| H10 | Fixed | `66d5aad` | New finding; end-to-end test fails without the fix. |
+| M1 | Fixed | `4271e8f` | `pip-audit`: none. pytest-asyncio 0.24 → 1.4 for pytest 9. |
+| M2 | Fixed | `42e4000` | |
+| M3 | Fixed | `ec80772` | Adds `frontend/.env.example`. |
+| M4 | Fixed | `5a296da` | `allow`/`record` removed with H5. |
+| M5 | Fixed | `c90b4e1` | `constraints.txt`, referenced from `requirements.txt`. Generated on Python 3.12; CI (3.11) will confirm. |
+| M6 | Skipped | — | Your call. |
+| L1 | Fixed | `42e4000` | |
+| L2, L3 | Fixed | `522be2c` | |
+| L4 | Fixed | `ec80772` | |
+| L5 | Fixed | `734e935` | |
+| L6 | Left as-is | — | Your call. |
+
+### Numbers that changed
+
+| Figure | Before | After |
+|---|---|---|
+| Dataset version | `2026.09.0` | `2026.10.0` |
+| Test suite | 231 claimed / 362 actual | 408 |
+| Golden set, routing eval | 100 % / 100 % | unchanged |
+| `npm audit` / `pip-audit` | 15 / 3 | 0 / 0 |
+| README "What it comes to" | no live figures | live baseline with intervals |
+
+The live eval baseline (2026-09-04) was not re-run: a full run costs ~200 k tokens. It is
+worth re-recording after deploy, since B1, B2, H4 and H10 all touch what it measures.
