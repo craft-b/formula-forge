@@ -353,7 +353,7 @@ Full annotated list in [`backend/.env.example`](backend/.env.example). The ones 
 ```bash
 cd frontend
 npm install
-echo "VITE_API_URL=http://127.0.0.1:8000" > .env.local
+cp .env.example .env.local    # VITE_API_URL=http://127.0.0.1:8000
 npm run dev
 ```
 
