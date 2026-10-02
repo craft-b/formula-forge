@@ -1,3 +1,4 @@
+import logging
 import re
 from typing import Literal, Optional, TypedDict, List
 
@@ -5,6 +6,8 @@ from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from llm import get_llm
 from json_utils import extract_json_block
+
+logger = logging.getLogger(__name__)
 
 llm = get_llm()
 # Formula generation uses Groq JSON mode so the model must emit a single JSON
@@ -482,9 +485,41 @@ Requirements:
     return [_FORMULA_SYSTEM, prompt]
 
 
+def _json_mode_rejection(exc: Exception) -> Optional[str]:
+    """The model's partial output if `exc` is a JSON-mode validation refusal.
+
+    Groq validates JSON-mode output server-side and answers 400
+    `json_validate_failed` when the model produced something unparseable. That
+    is a malformed proposal, not a broken request - the same failure the repair
+    path exists for - but raised as an exception it escaped the formula node and
+    reached the user as "BadRequestError", skipping the one repair entirely.
+    Returns None for any other error, which should propagate.
+    """
+    body = getattr(exc, "body", None)
+    if not isinstance(body, dict):
+        return None
+    err = body.get("error", body)
+    if not isinstance(err, dict) or err.get("code") != "json_validate_failed":
+        return None
+    return err.get("failed_generation") or ""
+
+
 def _invoke_formula(messages: list) -> str:
-    """Call the JSON-mode LLM and return the extracted JSON string."""
-    response = formula_llm.invoke(messages)
+    """Call the JSON-mode LLM and return the extracted JSON string.
+
+    A provider-side JSON validation failure returns the partial generation
+    (often empty) instead of raising, so it parses as a failed first attempt
+    and takes the single repair like any other malformed proposal.
+    """
+    try:
+        response = formula_llm.invoke(messages)
+    except Exception as exc:
+        partial = _json_mode_rejection(exc)
+        if partial is None:
+            raise
+        logger.warning("Provider rejected JSON-mode output (json_validate_failed); "
+                       "treating as an unparseable attempt")
+        return extract_json_block(partial)
     return extract_json_block(response.content)
 
 

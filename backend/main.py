@@ -470,8 +470,11 @@ async def _stream_agent(
                     if isinstance(output, dict) and output.get("context") is not None:
                         rag_context = output["context"]
 
-            if is_formula_run and formula_buffer:
+            if is_formula_run:
                 # The validation gate: no path emits LLM numbers to the client.
+                # An empty buffer (the provider refused the JSON) is still a
+                # formula attempt: it fails to parse and takes the one repair,
+                # rather than falling through to the Q&A bookkeeping below.
                 # In a thread for the same reason: a failed first attempt
                 # makes a synchronous repair call.
                 result = await asyncio.to_thread(_resolve_formula, formula_buffer,
