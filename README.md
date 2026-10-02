@@ -419,6 +419,10 @@ runs in CI without an API key. Coverage by area:
 - **Compliance regression** (`test_golden_eval.py`) — 18 committed brief-to-formula cases
   run through the validator with no LLM involved. CI fails if schema validity or compliance
   accuracy drops below 100%, or if the case set shrinks below 15.
+- **Q&A grounding** (`test_grounding.py`) — the live answers that invented nutrient values
+  are reported as ungrounded; library figures, rounding and the per-100 g basis are not.
+- **Responsiveness** (`test_responsiveness.py`) — `/health` stays responsive while a
+  provider call is in flight, and every provider client is built with a timeout.
 
 ### Evaluating the model, not just the math
 
@@ -480,7 +484,7 @@ The system as it stands, measured rather than asserted:
 | Governed ingredient library | 34 ingredients, dataset `2026.10.0`, every row with a full nutrient vector and provenance |
 | Model-authored numbers in a formulation | 0, enforced by type and pinned by test |
 | Model-authored numbers in a Q&A answer | checked against the retrieved rows; any unmatched figure is shown as unverified |
-| Domain + gate test suite | 231 tests, no live LLM, deterministic in CI |
+| Domain + gate test suite | 408 tests, no live LLM, deterministic in CI |
 | Golden compliance set | 18 brief-to-formula cases, 100% schema-valid, 100% compliance accuracy |
 | Routing eval | 46 labelled briefs, 100% intent routing, 100% ruleset activation |
 | Repairs per request | at most 1, structurally — `_resolve_formula()` has no loop |
