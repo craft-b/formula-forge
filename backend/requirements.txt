@@ -1,3 +1,5 @@
+# Transitive pins live in constraints.txt; see the note there.
+-c constraints.txt
 fastapi==0.136.1
 uvicorn==0.46.0
 python-dotenv==1.2.2

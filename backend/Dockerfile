@@ -6,8 +6,9 @@
 #
 # ── Build stage ───────────────────────────────────────────────────────────────
 # Pinned to an exact patch release matching .python-version / runtime.txt, not
-# `latest`: requirements.txt pins every dependency to an exact version, and a
-# floating interpreter would undo that reproducibility from underneath. For a
+# `latest`: requirements.txt and constraints.txt pin every dependency to an
+# exact version, and a floating interpreter would undo that reproducibility
+# from underneath. For a
 # fully immutable pin, append the digest:
 #   FROM python:3.11.9-slim-bookworm@sha256:<digest> AS builder
 FROM python:3.11.9-slim-bookworm AS builder
@@ -17,9 +18,10 @@ ENV PIP_NO_CACHE_DIR=1 \
 
 # Dependencies are installed into a self-contained venv that the runtime stage
 # copies wholesale, so pip, its metadata, and the wheel cache never reach the
-# shipped image. requirements.txt is copied on its own so this layer is rebuilt
-# only when the pinned dependency set changes — not on every source edit.
-COPY requirements.txt /tmp/requirements.txt
+# shipped image. requirements.txt and constraints.txt (the transitive pins it
+# references with -c) are copied on their own so this layer is rebuilt only
+# when the pinned dependency set changes — not on every source edit.
+COPY requirements.txt constraints.txt /tmp/
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt
 
