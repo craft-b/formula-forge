@@ -262,7 +262,9 @@ def meta():
         "dataset_version": repo.version,
         "ingredient_count": len(repo.ingredients),
         "modules": modules,
-        "model": settings.groq_model,
+        # The id this process calls, from the same resolver /health uses.
+        # settings.groq_model is wrong whenever LLM_PROVIDER is not groq.
+        "model": _active_model(),
     }
 
 
@@ -325,11 +327,9 @@ def _probe_llm_client() -> dict:
     status, detail = getattr(app.state, "model_check", ("unverified", "Not yet checked."))
     if status == "missing":
         return {"status": "unavailable", "detail": detail}
-    if status == "unverified":
-        # Could not confirm either way. Do not fail a possibly-working instance
-        # over a metadata call, but do not claim it is verified either.
-        return {"status": "ok",
-                "detail": f"API key configured; chat model initialized. {detail}"}
+    # "ok" and "unverified" both pass: an instance that could not confirm its
+    # model over a metadata call is not failed for it, and the detail says
+    # which of the two it is rather than claiming verification.
     return {"status": "ok", "detail": f"API key configured; chat model initialized. {detail}"}
 
 
