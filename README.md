@@ -11,7 +11,7 @@ checks the result against the active dietary rulesets. It is built for formulato
 product developers doing early-stage feasibility work, where the question is not "what
 could this look like" but "does this actually meet the constraint, and can you show me."
 
-![The FormulaForge workspace: a renal-safe formulation with its computed composition, per-serving values and constraint verdicts](docs/workspace.png)
+![The FormulaForge workspace: a renal-safe vanilla formulation with its compliance verdict, physical-band advisories and computed mix composition](docs/workspace.png)
 
 [Live demo](https://formula-forge-chi.vercel.app) — try a brief like
 *"formulate a renal-safe vanilla ice cream"*.
