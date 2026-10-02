@@ -457,7 +457,8 @@ export default function App() {
       const decoder = new TextDecoder()
       let buffer = ""
 
-      while (true) {
+      // Labelled: "[DONE]" ends the stream, not just the current chunk's loop.
+      read: while (true) {
         const { done, value } = await reader.read()
         if (done) break
         buffer += decoder.decode(value, { stream: true })
@@ -467,7 +468,10 @@ export default function App() {
         for (const part of parts) {
           if (!part.startsWith("data: ")) continue
           const payload = part.slice(6)
-          if (payload === "[DONE]") break
+          if (payload === "[DONE]") {
+            void reader.cancel()
+            break read
+          }
 
           let event: SSEEvent
           try {
