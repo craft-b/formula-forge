@@ -71,7 +71,7 @@ POST /api/chat
   ├─ request_id_middleware     X-Request-ID in or minted, bound to a contextvar
   ├─ limiter.limit()           slowapi, per client address (default 30/minute)
   ├─ ChatRequest               pydantic: message 1–2000 chars, else 422
-  └─ TokenBudget.allow()       daily global + per-session caps, else 429
+  └─ TokenBudget.reserve()     daily global + per-address + per-session caps, else 429
   │
   ▼
 _stream_agent()  ──────────────────────────────────────────────── SSE generator
@@ -106,7 +106,7 @@ SSE events: token | formula | rejection | grounding | error | done
 
 A request arrives at `chat()` in [`backend/main.py`](backend/main.py). Middleware attaches
 a request id and applies CORS; the slowapi decorator applies the per-address rate limit;
-pydantic validates the body; `TokenBudget.allow()` reserves an estimated token spend or
+pydantic validates the body; `TokenBudget.reserve()` reserves an estimated token spend or
 returns 429.
 
 Routing is then decided without an LLM call. `detect_modules()` regex-matches the message
@@ -213,11 +213,14 @@ a transparent triangular function of PAC. The UI renders that distinction.
 controls ([`backend/budget.py`](backend/budget.py), [`backend/main.py`](backend/main.py)).
 
 **Daily token budget, reserved up front.** `TokenBudget` holds a global daily cap
-(default 2,000,000 tokens) and a per-session cap (default 50,000), both reset at UTC day
-rollover and guarded by a lock. The estimate is reserved *before* the LLM call, not
+(default 2,000,000 tokens), a per-client-address cap (default 200,000) and a per-session
+cap (default 50,000), all reset at UTC day rollover and guarded by a lock. The estimate is reserved *before* the LLM call, not
 recorded after it, because accounting after the fact leaves a window in which a burst of
 concurrent requests all pass a check that each of them then invalidates. The global cap
-bounds the bill; the session cap stops one client consuming it alone. The budget reserves
+bounds the bill; the address cap stops one caller consuming it alone. The session cap
+only bounds one conversation — the session id is client-supplied, so a caller that sends
+a fresh one per request gets a fresh session allowance, which is why the address cap
+exists. The budget reserves
 and never releases — there is no refund path and no reconciliation against provider usage,
 which is deliberate for a control whose job is to fail safe.
 
@@ -339,6 +342,9 @@ Full annotated list in [`backend/.env.example`](backend/.env.example). The ones 
 | `CHAT_RATE_LIMIT` | `30/minute` | slowapi limit string for `/api/chat`. |
 | `GLOBAL_DAILY_TOKENS` | `2000000` | Daily token cap across all sessions. |
 | `SESSION_DAILY_TOKENS` | `50000` | Daily token cap per session. |
+| `CLIENT_DAILY_TOKENS` | `200000` | Daily token cap per client address. |
+| `LLM_TIMEOUT_S` / `LLM_MAX_RETRIES` | `30` / `1` | Bound on every provider call. |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Read by uvicorn. Set to `*` on Render so per-address limits see the caller, not the proxy. |
 | `APP_VERSION` | `1.0.0` | Reported by `/health`. Stamp a git SHA here at build time. |
 | `LOG_LEVEL` | `INFO` | Root log level. |
 
@@ -545,14 +551,16 @@ a service.
 **Anything that survives a restart or a second replica.** Session history, the last-formula
 store, the token budget, and slowapi's counters are all in-process. A second uvicorn worker
 or a second Render instance forks all four silently: conversations fragment, and both the
-budget and the rate limit become per-process rather than per-service. `TokenBudget`'s
-`allow`/`record` interface is the shape a Redis adapter would implement. Until that exists
+budget and the rate limit become per-process rather than per-service. `TokenBudget.reserve()`
+is the interface a Redis adapter would implement. Until that exists
 this is a single-process deployment by construction, not by accident.
 
-**Rate limiting that is correct behind a proxy.** `get_remote_address()` reads
-`request.client.host`. Behind Render's proxy, without trusted forwarded headers configured,
-that is the proxy's address rather than the caller's — which collapses a per-client limit
-toward a global one. Correct for local and direct traffic, understated in production.
+**Per-address limits that are correct behind a proxy by default.** `get_remote_address()`
+reads `request.client.host`. Behind Render's proxy that is the proxy's address unless
+uvicorn is told to trust the forwarded headers (`FORWARDED_ALLOW_IPS=*`, safe only where
+the app is reachable solely through the proxy). Without it, the rate limit and the
+address token cap are shared by every caller — which is why the address cap defaults to a
+tenth of the global one rather than something a single demo session could exhaust.
 
 **Token accounting that matches the bill.** `estimate_tokens()` counts the user's message
 at roughly four characters per token plus a fixed output reserve. It does not count the

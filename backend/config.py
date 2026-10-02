@@ -89,6 +89,10 @@ class Settings(BaseSettings):
     chat_rate_limit: str = "30/minute"
     global_daily_tokens: int = 2_000_000
     session_daily_tokens: int = 50_000
+    # Per client address. Sized so that if forwarded headers are NOT trusted
+    # (every caller then shares the proxy's address) it degrades to a tenth of
+    # the global cap rather than choking the demo. See FORWARDED_ALLOW_IPS.
+    client_daily_tokens: int = 200_000
 
     # Observability
     langchain_tracing_v2: bool = False

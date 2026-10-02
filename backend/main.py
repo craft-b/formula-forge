@@ -46,6 +46,7 @@ CHAT_RATE_LIMIT = settings.chat_rate_limit
 budget = TokenBudget(
     global_daily=settings.global_daily_tokens,
     session_daily=settings.session_daily_tokens,
+    client_daily=settings.client_daily_tokens,
 )
 limiter = Limiter(key_func=get_remote_address)
 
@@ -507,9 +508,11 @@ async def chat(request: Request, req: ChatRequest):
     session_id = req.session_id or str(uuid.uuid4())
 
     # Token budget: check and consume in one atomic step, so a burst cannot all
-    # pass the check before any of them consumes (see TokenBudget.reserve).
+    # pass the check before any of them consumes (see TokenBudget.reserve). The
+    # client cap is keyed on the caller's address because the session id is
+    # theirs to choose: a fresh one per request would otherwise reset the cap.
     est = estimate_tokens(req.message)
-    if not budget.reserve(session_id, est):
+    if not budget.reserve(session_id, est, client=get_remote_address(request)):
         return JSONResponse(
             status_code=429,
             content={"error": "Daily token budget exceeded. Please try again tomorrow."},
