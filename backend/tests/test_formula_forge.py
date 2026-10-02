@@ -192,6 +192,37 @@ class TestSearchFoods:
         assert search_foods("a protein of in") == search_foods("protein")
 
 
+def _names(query: str, k: int) -> list[str]:
+    return [line.split(":")[0] for line in search_foods(query)[:k]]
+
+
+class TestSearchRelevance:
+    """The five realistic questions from the readiness review (H8)."""
+
+    def test_named_ingredient_comes_first(self):
+        assert _names("How much potassium is in whole milk?", 1) == ["Milk, whole, 3.25% fat"]
+
+    def test_role_question_finds_the_role(self):
+        # Used to return coconut cream, cream cheese, heavy cream: "ice cream"
+        # matched every cream row and no sweetener was retrieved.
+        top = _names("Which sweetener is best for a diabetic ice cream?", 3)
+        assert set(top) == {"Allulose (D-psicose)", "Erythritol", "Sucralose (high-intensity)"}
+
+    def test_low_nutrient_orders_by_that_nutrient(self):
+        # Used to rank low-fat buttermilk first, on the word "low".
+        top = _names("What's a good low-phosphorus protein source?", 3)
+        assert top[0] == "Whey protein isolate (90%)"  # 150 mg vs 700 mg for the others
+        assert all("protein" in n or "casein" in n for n in top)
+
+    def test_comparison_returns_both_ingredients(self):
+        top = _names("Compare coconut cream and heavy cream for fat content", 2)
+        assert set(top) == {"Cream, heavy (36% fat)", "Coconut cream"}
+
+    def test_stabilizer_question_returns_stabilizers(self):
+        assert set(_names("What stabilizer should I use to reduce iciness?", 3)) == {
+            "Carrageenan (lambda)", "Guar gum", "Locust bean gum"}
+
+
 # ── Formula JSON parsing ──────────────────────────────────────────────────────
 
 class TestFormulaJsonParsing:

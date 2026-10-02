@@ -203,27 +203,100 @@ def _ingredient_context_line(ing) -> str:
     )
 
 
+# Words that carry no ingredient identity. "low" and "high" are the costly ones:
+# "low-phosphorus protein" matched "Buttermilk, low fat" on "low" and ranked it
+# first. They are read as an ordering instruction instead (_NUTRIENT_ORDER).
+_SEARCH_STOPWORDS = frozenset("""
+    about added amount and any are best between can compare content contain contains could
+    does for from good has have high how into its less low lower lowest many more much need
+    per reduce reduced rich serving should source than that the this use using want what
+    which will with would your
+""".split())
+
+# Query words that name a functional role rather than an ingredient. "Which
+# sweetener is best?" shares no word with "Erythritol" or "Allulose"; it shares
+# a role with them.
+_ROLE_TERMS: dict[str, frozenset[str]] = {
+    "sweetener": frozenset({"sweetener", "polyol", "high_intensity"}),
+    "sweeteners": frozenset({"sweetener", "polyol", "high_intensity"}),
+    "sweetening": frozenset({"sweetener", "polyol", "high_intensity"}),
+    "polyol": frozenset({"polyol"}), "polyols": frozenset({"polyol"}),
+    "stabilizer": frozenset({"stabilizer"}), "stabilizers": frozenset({"stabilizer"}),
+    "stabiliser": frozenset({"stabilizer"}), "stabilisers": frozenset({"stabilizer"}),
+    "thickener": frozenset({"stabilizer"}), "thickeners": frozenset({"stabilizer"}),
+    "emulsifier": frozenset({"emulsifier"}), "emulsifiers": frozenset({"emulsifier"}),
+    "fiber": frozenset({"bulking_fiber", "mimetic"}), "fibre": frozenset({"bulking_fiber", "mimetic"}),
+}
+
+# "low phosphorus", "lowest sodium", "high protein": a direction and a field.
+# Ties on relevance are broken by that nutrient, so the answer the question
+# asked for comes first. A diabetic brief asks for low sugars.
+_NUTRIENT_WORDS = {
+    "phosphorus": "phosphorus_mg", "potassium": "potassium_mg", "sodium": "sodium_mg",
+    "salt": "sodium_mg", "calcium": "calcium_mg", "sugar": "sugars_g", "sugars": "sugars_g",
+    "fat": "fat_g", "protein": "protein_g", "calorie": "energy_kcal", "calories": "energy_kcal",
+    "carb": "carbs_g", "carbs": "carbs_g", "fiber": "fiber_g", "fibre": "fiber_g",
+}
+_NUTRIENT_ORDER = re.compile(
+    r"\b(low|lower|lowest|reduced|less|high|higher|highest|rich|more)[\s-]+(?:in\s+)?"
+    r"(" + "|".join(_NUTRIENT_WORDS) + r")\b", re.I)
+_DIRECTION = {"low": 1, "lower": 1, "lowest": 1, "reduced": 1, "less": 1,
+              "high": -1, "higher": -1, "highest": -1, "rich": -1, "more": -1}
+
+
+def _nutrient_order(query: str) -> Optional[tuple[str, int]]:
+    """(field, +1 ascending | -1 descending) when the query asks for an extreme."""
+    m = _NUTRIENT_ORDER.search(query)
+    if m:
+        return _NUTRIENT_WORDS[m.group(2).lower()], _DIRECTION[m.group(1).lower()]
+    if re.search(r"\b(?:pre)?diabet\w*", query, re.I):
+        return "sugars_g", 1
+    return None
+
+
 def search_foods(query: str, n: int = 8) -> List[str]:
     """Retrieve governed ingredients matching the query, with real nutrients.
 
-    Retrieval now runs over the governed ingredient library (which carries full
-    USDA-sourced nutrient vectors) rather than the old names-only usda_foods.json,
-    so RAG answers are grounded in real numbers. Keyword scoring with
-    word-boundary tokenization (so "milk" no longer matches "buttermilk") and a
-    length filter; the library is already deduplicated (F8). Vector search is the
-    Phase B upgrade (spec §2.2) once a managed store replaces the free tier.
+    Retrieval runs over the governed ingredient library, so RAG answers are
+    grounded in real numbers. Deterministic keyword scoring with word-boundary
+    tokenization (so "milk" does not match "buttermilk"), plus three rules found
+    by testing realistic questions (readiness review H8):
+
+    * the product being made ("ice cream", "gelato", ...) is removed first —
+      it describes the target, and "ice cream" matched every cream row;
+    * role words ("sweetener", "stabilizer") match the ingredients in that
+      role, which share no name word with the question;
+    * "low/high <nutrient>" (and "diabetic", for sugars) orders equally
+      relevant rows by that nutrient instead of alphabetically.
+
+    Vector search is the Phase B upgrade (spec §2.2) once a managed store
+    replaces the free tier.
     """
-    tokens = {w for w in _WORD_RE.findall(query.lower()) if len(w) > 2}
-    if not tokens:
+    text = _PRODUCT_NOUN_RE.sub(" ", query.lower())
+    words = {w for w in _WORD_RE.findall(text) if len(w) > 2} - _SEARCH_STOPWORDS
+    wanted_roles = set().union(*(_ROLE_TERMS.get(w, frozenset()) for w in words))
+    # Role words are matched through wanted_roles. Nutrient words describe what
+    # every row has, so they do not identify one ("potassium in whole milk") —
+    # except the few that are also ingredient names ("whey protein", "salt").
+    name_tokens = ((words - set(_ROLE_TERMS) - set(_NUTRIENT_WORDS))
+                   | (words & {"protein", "fat", "salt", "sugar"}))
+    if not name_tokens and not wanted_roles:
         return []
+    order = _nutrient_order(query)
     from domain import get_repository
     scored = []
     for ing in get_repository().ingredients:
-        haystack = set(_WORD_RE.findall(f"{ing.name} {ing.role}".lower()))
-        score = len(tokens & haystack)
+        haystack = set(_WORD_RE.findall(f"{ing.name} {ing.role.replace('_', ' ')}".lower()))
+        score = len(name_tokens & haystack) + (2 if ing.role in wanted_roles else 0)
         if score > 0:
             scored.append((score, ing))
-    scored.sort(key=lambda pair: (-pair[0], pair[1].name))
+
+    def rank(pair):
+        score, ing = pair
+        value = getattr(ing.nutrients_per_100g, order[0]) * order[1] if order else 0
+        return (-score, value, ing.name)
+
+    scored.sort(key=rank)
     return [_ingredient_context_line(ing) for _, ing in scored[:n]]
 
 
