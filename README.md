@@ -345,7 +345,7 @@ Full annotated list in [`backend/.env.example`](backend/.env.example). The ones 
 | `CLIENT_DAILY_TOKENS` | `200000` | Daily token cap per client address. |
 | `LLM_TIMEOUT_S` / `LLM_MAX_RETRIES` | `30` / `1` | Bound on every provider call. |
 | `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Read by uvicorn. Set to `*` on Render so per-address limits see the caller, not the proxy. |
-| `APP_VERSION` | `1.0.0` | Reported by `/health`. Stamp a git SHA here at build time. |
+| `APP_VERSION` | Render's `RENDER_GIT_COMMIT` (short), else `1.0.0` | Reported by `/health`. Leave unset on Render; set it to stamp a Docker build. |
 | `LOG_LEVEL` | `INFO` | Root log level. |
 
 ### Frontend, locally
@@ -484,7 +484,7 @@ The system as it stands, measured rather than asserted:
 | Governed ingredient library | 34 ingredients, dataset `2026.10.0`, every row with a full nutrient vector and provenance |
 | Model-authored numbers in a formulation | 0, enforced by type and pinned by test |
 | Model-authored numbers in a Q&A answer | checked against the retrieved rows; any unmatched figure is shown as unverified |
-| Domain + gate test suite | 408 tests, no live LLM, deterministic in CI |
+| Domain + gate test suite | 411 tests, no live LLM, deterministic in CI |
 | Golden compliance set | 18 brief-to-formula cases, 100% schema-valid, 100% compliance accuracy |
 | Routing eval | 46 labelled briefs, 100% intent routing, 100% ruleset activation |
 | Repairs per request | at most 1, structurally — `_resolve_formula()` has no loop |

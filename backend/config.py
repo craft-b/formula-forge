@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 
 from dotenv import load_dotenv
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 load_dotenv()
@@ -65,15 +66,28 @@ DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 DEFAULT_FALLBACK_MODEL = "openai/gpt-oss-20b"
 
 
+def _default_app_version() -> str:
+    """The build identity when APP_VERSION is not set explicitly.
+
+    Render exposes the deployed commit as RENDER_GIT_COMMIT on every build, so
+    falling back to it keeps /health matched to the running code without a
+    hand-edited variable that goes stale on the next deploy. Short SHA, as git
+    prints it. Elsewhere (local, tests) there is no commit to report.
+    """
+    commit = os.getenv("RENDER_GIT_COMMIT", "").strip()
+    return commit[:7] if commit else "1.0.0"
+
+
 class Settings(BaseSettings):
     """12-factor configuration. Field names map to upper-case env vars."""
 
     model_config = SettingsConfigDict(extra="ignore")
 
     # Service identity — surfaced by the /health readiness probe so a deployed
-    # container can be matched to the build it is running. Override with
-    # APP_VERSION (e.g. a git SHA stamped at image build time).
-    app_version: str = "1.0.0"
+    # container can be matched to the build it is running. APP_VERSION wins when
+    # set (e.g. a git SHA stamped at image build time); otherwise Render's
+    # RENDER_GIT_COMMIT; otherwise "1.0.0".
+    app_version: str = Field(default_factory=_default_app_version)
 
     # LLM provider / fallback. Model ids come from the module-level constants
     # above so that this object and llm.py cannot disagree about which model the
