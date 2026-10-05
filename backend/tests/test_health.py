@@ -214,3 +214,28 @@ class TestModelAvailabilityCheck:
             body = client.get("/health").json()
         assert body["dependencies"]["llm_client"]["status"] == "unavailable"
         assert body["status"] != "ok"
+
+
+class TestAppVersion:
+    """The build identity /health reports, without a hand-maintained variable."""
+
+    def _settings(self, monkeypatch, **env):
+        from config import Settings
+        for key in ("APP_VERSION", "RENDER_GIT_COMMIT"):
+            monkeypatch.delenv(key, raising=False)
+        for key, value in env.items():
+            monkeypatch.setenv(key, value)
+        return Settings()
+
+    def test_falls_back_to_the_render_commit(self, monkeypatch):
+        s = self._settings(monkeypatch,
+                           RENDER_GIT_COMMIT="f7f1537194a630624541236d28387fc1d9f78ac6")
+        assert s.app_version == "f7f1537"
+
+    def test_explicit_app_version_wins(self, monkeypatch):
+        s = self._settings(monkeypatch, APP_VERSION="build-42",
+                           RENDER_GIT_COMMIT="f7f1537194a630624541236d28387fc1d9f78ac6")
+        assert s.app_version == "build-42"
+
+    def test_default_off_render(self, monkeypatch):
+        assert self._settings(monkeypatch).app_version == "1.0.0"
