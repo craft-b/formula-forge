@@ -17,6 +17,10 @@ interface Run {
   rejection?: RejectedFormula
   /** Footnote shown when a run behaved differently than the user likely expected. */
   hint?: string
+  /** A streamed Q&A answer: model prose, not domain-computed output. */
+  modelWritten?: boolean
+  /** Which figures in a Q&A answer the governed library did not supply. */
+  grounding?: { has_quantities: boolean; ungrounded: string[] }
 }
 
 // ── Pipeline progress (shown while a run is in flight) ───────────────────────
@@ -103,12 +107,34 @@ function AnswerBlock({
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm text-slate-700 leading-relaxed ff-rise">
       <Markdown text={run.content} />
+      {run.modelWritten && <GroundingNote grounding={run.grounding} />}
       {run.hint && (
         <p className="mt-3 pt-3 border-t border-slate-100 text-meta text-amber-700 bg-amber-50/60 -mx-6 -mb-4 px-6 py-2.5 rounded-b-2xl">
           {run.hint}
         </p>
       )}
     </div>
+  )
+}
+
+// Q&A answers are the one place model prose reaches the user unrecomputed, so
+// they say so, and name any figure the governed library did not supply.
+function GroundingNote({ grounding }: { grounding?: Run["grounding"] }) {
+  const ungrounded = grounding?.ungrounded ?? []
+  if (ungrounded.length > 0) {
+    return (
+      <p className="mt-3 text-meta text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+        <span className="font-medium">Unverified figures:</span> {ungrounded.join(", ")}. These are
+        model-written and do not come from the governed ingredient library.
+      </p>
+    )
+  }
+  return (
+    <p className="mt-3 text-meta text-slate-500">
+      {grounding?.has_quantities
+        ? "Model-written answer. Its figures match the governed library rows it was given."
+        : "Model-written answer."}
+    </p>
   )
 }
 
@@ -182,7 +208,7 @@ function Hero({
             { value: meta?.ingredient_count ?? "—", label: "Governed ingredients", hint: "USDA FDC nutrients + curated functional data" },
             { value: meta?.modules.length ?? "—", label: "Constraint modules", hint: "Declarative, versioned rulesets" },
             { value: "12+", label: "Checks per formula", hint: "Mass balance, physics bands, compliance limits" },
-            { value: "0", label: "LLM numbers trusted", hint: "All nutrition computed by the domain engine" },
+            { value: "0", label: "LLM numbers trusted", hint: "Formula nutrition is computed by the domain engine; figures in Q&A answers are checked against the library and flagged when they are not from it" },
           ].map((s) => (
             <div key={s.label} className="px-4 py-3.5" title={s.hint}>
               <div className="text-xl font-semibold text-slate-900 num font-mono leading-none">{s.value}</div>
@@ -431,7 +457,8 @@ export default function App() {
       const decoder = new TextDecoder()
       let buffer = ""
 
-      while (true) {
+      // Labelled: "[DONE]" ends the stream, not just the current chunk's loop.
+      read: while (true) {
         const { done, value } = await reader.read()
         if (done) break
         buffer += decoder.decode(value, { stream: true })
@@ -441,7 +468,10 @@ export default function App() {
         for (const part of parts) {
           if (!part.startsWith("data: ")) continue
           const payload = part.slice(6)
-          if (payload === "[DONE]") break
+          if (payload === "[DONE]") {
+            void reader.cancel()
+            break read
+          }
 
           let event: SSEEvent
           try {
@@ -455,7 +485,7 @@ export default function App() {
             answerKind ??= "tokens"
             if (!gotAnswer) {
               gotAnswer = true
-              setRuns((prev) => [...prev, { role: "assistant", content }])
+              setRuns((prev) => [...prev, { role: "assistant", content, modelWritten: true }])
             } else {
               setRuns((prev) => {
                 const next = [...prev]
@@ -478,6 +508,14 @@ export default function App() {
             gotAnswer = true
             answerKind = "structured"
             setRuns((prev) => [...prev, { role: "assistant", content: event.response, rejection: event.rejection }])
+          } else if (event.type === "grounding") {
+            const grounding = { has_quantities: event.has_quantities, ungrounded: event.ungrounded }
+            setRuns((prev) => {
+              const next = [...prev]
+              const last = next[next.length - 1]
+              if (last?.modelWritten) next[next.length - 1] = { ...last, grounding }
+              return next
+            })
           } else if (event.type === "error") {
             gotAnswer = true
             answerKind = "structured"

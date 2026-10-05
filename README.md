@@ -11,7 +11,7 @@ checks the result against the active dietary rulesets. It is built for formulato
 product developers doing early-stage feasibility work, where the question is not "what
 could this look like" but "does this actually meet the constraint, and can you show me."
 
-![The FormulaForge workspace: a renal-safe formulation with its computed composition, per-serving values and constraint verdicts](docs/workspace.png)
+![The FormulaForge workspace: a renal-safe vanilla formulation with its compliance verdict, physical-band advisories and computed mix composition](docs/workspace.png)
 
 [Live demo](https://formula-forge-chi.vercel.app) — try a brief like
 *"formulate a renal-safe vanilla ice cream"*.
@@ -37,19 +37,26 @@ A number that is confidently wrong by 40% is a safety issue, and it is undetecta
 the person most likely to trust it — a reader who cannot recompute it themselves.
 
 So the architecture starts from a constraint rather than a capability: **no
-nutritional, cost or compliance number is model-produced — every one is computed from a
-governed ingredient library.** The model is used for the thing it is genuinely good at,
+nutritional, cost or compliance number in a formulation is model-produced — every one is
+computed from a governed ingredient library.** The model is used for the thing it is genuinely good at,
 proposing plausible ingredient structures, and is given no authority over anything that
 has to be true.
 
 That claim is deliberately narrower than "the model never emits a number". It does emit
-two kinds, and both are handled explicitly rather than wished away:
+three kinds, and each is handled explicitly rather than wished away:
 
 - **Ingredient percentages** are the proposal itself. They are structure, they are
   visible, and every figure derived from them is recomputed by the domain.
 - **Prose** in `formulation_notes` and per-line notes is unverifiable by construction. It
   is rendered as model-authored, visually distinct from computed output, and flagged when
   it contains a quantity the system never calculated.
+- **Answers to questions** (the Q&A path, not formulation) are model prose streamed to
+  the user. The prompt restricts figures to the governed rows retrieved for the question,
+  but a prompt is not a guarantee, so every nutrient quantity in the answer is checked
+  against those rows afterwards ([`backend/grounding.py`](backend/grounding.py)). The UI
+  labels every answer as model-written and names any figure the library did not supply.
+  These numbers are checked, not computed — they are the one place a model-authored
+  figure can reach a user, and it arrives marked as such.
 
 Everything else the model might try to assert is dropped at the boundary — including
 `overrun_pct`, which sets serving size and therefore divides every per-serving value the
@@ -64,7 +71,7 @@ POST /api/chat
   ├─ request_id_middleware     X-Request-ID in or minted, bound to a contextvar
   ├─ limiter.limit()           slowapi, per client address (default 30/minute)
   ├─ ChatRequest               pydantic: message 1–2000 chars, else 422
-  └─ TokenBudget.allow()       daily global + per-session caps, else 429
+  └─ TokenBudget.reserve()     daily global + per-address + per-session caps, else 429
   │
   ▼
 _stream_agent()  ──────────────────────────────────────────────── SSE generator
@@ -94,12 +101,12 @@ _resolve_formula()  ═══════════════════ TH
 ValidatedFormula (flagged if still non-compliant) | RejectedFormula
   │
   ▼
-SSE events: token | formula | rejection | error | done
+SSE events: token | formula | rejection | grounding | error | done
 ```
 
 A request arrives at `chat()` in [`backend/main.py`](backend/main.py). Middleware attaches
 a request id and applies CORS; the slowapi decorator applies the per-address rate limit;
-pydantic validates the body; `TokenBudget.allow()` reserves an estimated token spend or
+pydantic validates the body; `TokenBudget.reserve()` reserves an estimated token spend or
 returns 429.
 
 Routing is then decided without an LLM call. `detect_modules()` regex-matches the message
@@ -206,11 +213,14 @@ a transparent triangular function of PAC. The UI renders that distinction.
 controls ([`backend/budget.py`](backend/budget.py), [`backend/main.py`](backend/main.py)).
 
 **Daily token budget, reserved up front.** `TokenBudget` holds a global daily cap
-(default 2,000,000 tokens) and a per-session cap (default 50,000), both reset at UTC day
-rollover and guarded by a lock. The estimate is reserved *before* the LLM call, not
+(default 2,000,000 tokens), a per-client-address cap (default 200,000) and a per-session
+cap (default 50,000), all reset at UTC day rollover and guarded by a lock. The estimate is reserved *before* the LLM call, not
 recorded after it, because accounting after the fact leaves a window in which a burst of
 concurrent requests all pass a check that each of them then invalidates. The global cap
-bounds the bill; the session cap stops one client consuming it alone. The budget reserves
+bounds the bill; the address cap stops one caller consuming it alone. The session cap
+only bounds one conversation — the session id is client-supplied, so a caller that sends
+a fresh one per request gets a fresh session allowance, which is why the address cap
+exists. The budget reserves
 and never releases — there is no refund path and no reconciliation against provider usage,
 which is deliberate for a control whose job is to fail safe.
 
@@ -255,7 +265,7 @@ model id in use:
   "dependencies": {
     "llm_client":         {"status": "ok", "detail": "API key configured; chat model initialized."},
     "agent_graph":        {"status": "ok", "detail": "Compiled LangGraph agent loaded."},
-    "ingredient_library": {"status": "ok", "detail": "dataset 2026.09.0, 34 ingredients."}
+    "ingredient_library": {"status": "ok", "detail": "dataset 2026.10.0, 34 ingredients."}
   }
 }
 ```
@@ -332,6 +342,9 @@ Full annotated list in [`backend/.env.example`](backend/.env.example). The ones 
 | `CHAT_RATE_LIMIT` | `30/minute` | slowapi limit string for `/api/chat`. |
 | `GLOBAL_DAILY_TOKENS` | `2000000` | Daily token cap across all sessions. |
 | `SESSION_DAILY_TOKENS` | `50000` | Daily token cap per session. |
+| `CLIENT_DAILY_TOKENS` | `200000` | Daily token cap per client address. |
+| `LLM_TIMEOUT_S` / `LLM_MAX_RETRIES` | `30` / `1` | Bound on every provider call. |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Read by uvicorn. Set to `*` on Render so per-address limits see the caller, not the proxy. |
 | `APP_VERSION` | `1.0.0` | Reported by `/health`. Stamp a git SHA here at build time. |
 | `LOG_LEVEL` | `INFO` | Root log level. |
 
@@ -340,7 +353,7 @@ Full annotated list in [`backend/.env.example`](backend/.env.example). The ones 
 ```bash
 cd frontend
 npm install
-echo "VITE_API_URL=http://127.0.0.1:8000" > .env.local
+cp .env.example .env.local    # VITE_API_URL=http://127.0.0.1:8000
 npm run dev
 ```
 
@@ -406,6 +419,10 @@ runs in CI without an API key. Coverage by area:
 - **Compliance regression** (`test_golden_eval.py`) — 18 committed brief-to-formula cases
   run through the validator with no LLM involved. CI fails if schema validity or compliance
   accuracy drops below 100%, or if the case set shrinks below 15.
+- **Q&A grounding** (`test_grounding.py`) — the live answers that invented nutrient values
+  are reported as ungrounded; library figures, rounding and the per-100 g basis are not.
+- **Responsiveness** (`test_responsiveness.py`) — `/health` stays responsive while a
+  provider call is in flight, and every provider client is built with a timeout.
 
 ### Evaluating the model, not just the math
 
@@ -464,12 +481,34 @@ The system as it stands, measured rather than asserted:
 
 | | |
 |---|---|
-| Governed ingredient library | 34 ingredients, dataset `2026.09.0`, every row with a full nutrient vector and provenance |
-| Model-authored numbers reaching a user | 0, enforced by type and pinned by test |
-| Domain + gate test suite | 231 tests, no live LLM, deterministic in CI |
+| Governed ingredient library | 34 ingredients, dataset `2026.10.0`, every row with a full nutrient vector and provenance |
+| Model-authored numbers in a formulation | 0, enforced by type and pinned by test |
+| Model-authored numbers in a Q&A answer | checked against the retrieved rows; any unmatched figure is shown as unverified |
+| Domain + gate test suite | 408 tests, no live LLM, deterministic in CI |
 | Golden compliance set | 18 brief-to-formula cases, 100% schema-valid, 100% compliance accuracy |
 | Routing eval | 46 labelled briefs, 100% intent routing, 100% ruleset activation |
 | Repairs per request | at most 1, structurally — `_resolve_formula()` has no loop |
+
+And the half that is not deterministic. The live eval's recorded baseline
+(`eval/baseline.json`: 46 briefs, `openai/gpt-oss-120b`, 2026-09-04), each rate with
+its Wilson 95% interval:
+
+| Live generation metric | Rate | 95% CI | n |
+|---|---:|---|---:|
+| Provider answered (429s and timeouts excluded below) | 95% | 84–99% | 39/41 |
+| Output parsed into a candidate | 95% | 83–99% | 37/39 |
+| Every ingredient resolved to the governed library | 100% | 91–100% | 37/37 |
+| Cleared validation with no repair | 76% | 61–87% | 29/38 |
+| Of those that failed, recovered by the one repair | 86% | 49–97% | 6/7 |
+| Designed to the active limits rather than rescued by the gate | 73% | 56–85% | 24/33 |
+| Formulation notes free of unverified quantities | 0% | 0–9% | 0/37 |
+| Unsatisfiable briefs that did not yield a passing formula | 100% | 21–100% | 1/1 |
+
+Two of those deserve a plain reading. A quarter of first attempts fail validation, which
+is the gate doing its job rather than the model doing it. And the model writes a quantity
+into its notes essentially every time — which is why that prose is labelled model-authored
+and flagged in the UI rather than trusted. The baseline predates dataset `2026.10.0` and
+the Q&A grounding check, so it does not yet reflect either.
 
 None of that says the formulas are good. It says every number attached to one was computed
 from a governed source, that the arithmetic is checked, and that a failure is reported as a
@@ -499,7 +538,7 @@ been reading one as the other. The pattern is consistent enough to be a design
 rule now: make the failure loud, or you will not learn about it from the system.
 
 **Documentation drifts faster than you expect, and it drifts in your favour.** The
-"deliberately not built" list above named the generation-quality eval as the highest-value
+"deliberately not built" list below named the generation-quality eval as the highest-value
 missing piece for some weeks after that eval was built and running in CI, forty lines
 further up the same file. `docs/AUDIT_FINDINGS.md` sat in the repository describing, in the
 present tense, a version of the product that three months of commits had already replaced.
@@ -516,14 +555,16 @@ a service.
 **Anything that survives a restart or a second replica.** Session history, the last-formula
 store, the token budget, and slowapi's counters are all in-process. A second uvicorn worker
 or a second Render instance forks all four silently: conversations fragment, and both the
-budget and the rate limit become per-process rather than per-service. `TokenBudget`'s
-`allow`/`record` interface is the shape a Redis adapter would implement. Until that exists
+budget and the rate limit become per-process rather than per-service. `TokenBudget.reserve()`
+is the interface a Redis adapter would implement. Until that exists
 this is a single-process deployment by construction, not by accident.
 
-**Rate limiting that is correct behind a proxy.** `get_remote_address()` reads
-`request.client.host`. Behind Render's proxy, without trusted forwarded headers configured,
-that is the proxy's address rather than the caller's — which collapses a per-client limit
-toward a global one. Correct for local and direct traffic, understated in production.
+**Per-address limits that are correct behind a proxy by default.** `get_remote_address()`
+reads `request.client.host`. Behind Render's proxy that is the proxy's address unless
+uvicorn is told to trust the forwarded headers (`FORWARDED_ALLOW_IPS=*`, safe only where
+the app is reachable solely through the proxy). Without it, the rate limit and the
+address token cap are shared by every caller — which is why the address cap defaults to a
+tenth of the global one rather than something a single demo session could exhaust.
 
 **Token accounting that matches the bill.** `estimate_tokens()` counts the user's message
 at roughly four characters per token plus a fixed output reserve. It does not count the
@@ -535,14 +576,6 @@ meter; exact provider usage metadata would fix it.
 **Semantic retrieval.** `search_foods()` is keyword scoring with word-boundary tokenization
 over the governed library. It handles the ingredient-lookup case it is used for and avoids
 an embedding-model cold start on a free tier, but it does not do synonymy or paraphrase.
-
-**A recorded baseline for the live eval.** `eval/live_eval.py` scores generation quality
-— schema validity, grounding in the governed library, first-pass gate rate, repair
-recovery, constraint targeting — and the weekly workflow runs it. But `eval/baseline.json`
-currently holds only the offline routing run (`"mode": "offline"`), so the live half
-computes its rates with nothing to compare them against. Until a full 46-brief run is
-recorded with `--update-baseline`, the live gate reports numbers rather than gating on
-them, and the repair cap's one-retry rationale stays reasoned rather than measured.
 
 **IDDSI texture compliance.** The `dysphagia_iddsi` module is a declared stub. It advises
 and never fails, and says so in its own violation message and in `/api/meta`. Texture-modified
@@ -559,3 +592,7 @@ works — physical plausibility first, then dietary limits, with the distinction
 measured value and an estimated one kept visible throughout.
 
 [LinkedIn](https://linkedin.com/in/craft-bobby-5739b6) · [GitHub](https://github.com/craft-b/formula-forge)
+
+## License
+
+MIT — see [LICENSE](LICENSE).

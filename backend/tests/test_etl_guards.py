@@ -24,7 +24,8 @@ class TestMineralsAreNotInvented:
     def test_fdc_row_missing_minerals_raises(self):
         ing = _ingredient(fdc_id=999999)
         with pytest.raises(ValueError, match="phosphorus_mg|sodium_mg|potassium_mg|calcium_mg"):
-            _resolve_nutrients(ing, {"999999": dict(_MACROS_ONLY)})
+            # sugars_g present so the probe isolates the mineral guard.
+            _resolve_nutrients(ing, {"999999": dict(_MACROS_ONLY, sugars_g=0.56)})
 
     def test_the_error_says_what_to_do(self):
         ing = _ingredient(fdc_id=999999)
@@ -34,7 +35,7 @@ class TestMineralsAreNotInvented:
         assert "curated" in message and "fdc_id" in message
 
     def test_fdc_row_with_minerals_builds(self):
-        complete = dict(_MACROS_ONLY, sodium_mg=66.0, potassium_mg=102.0,
+        complete = dict(_MACROS_ONLY, sugars_g=0.56, sodium_mg=66.0, potassium_mg=102.0,
                         phosphorus_mg=443.0, calcium_mg=119.0)
         vector, provenance = _resolve_nutrients(_ingredient(fdc_id=329596),
                                                 {"329596": complete})
@@ -56,3 +57,63 @@ class TestMineralsAreNotInvented:
                                               "carbs_g": 0.0, "energy_kcal": 884.0})
         with pytest.raises(ValueError, match="water_g"):
             _resolve_nutrients(ing, {})
+
+
+# What a Foundation Foods dairy record looks like: carbohydrate by difference,
+# minerals reported, no total-sugars row (FDC 322559, skim milk).
+_DAIRY_NO_SUGARS = dict(_MACROS_ONLY, sodium_mg=41.0, potassium_mg=167.0,
+                        phosphorus_mg=107.0, calcium_mg=122.0)
+
+
+class TestSugarsAreNotInvented:
+    """Sugars is ruleset-gated (diabetic), so it gets the minerals' rule."""
+
+    def test_fdc_row_missing_sugars_raises(self):
+        ing = _ingredient(fdc_id=322559)
+        with pytest.raises(ValueError, match="sugars_g"):
+            _resolve_nutrients(ing, {"322559": dict(_DAIRY_NO_SUGARS)})
+
+    def test_override_fills_the_gap_and_is_labelled(self):
+        ing = _ingredient(fdc_id=322559, nutrient_overrides={"sugars_g": 5.0})
+        vector, provenance = _resolve_nutrients(ing, {"322559": dict(_DAIRY_NO_SUGARS)})
+        assert vector["sugars_g"] == 5.0
+        assert provenance["curated_overrides"] == ["sugars_g"]
+        assert provenance["source"] == "FDC_foundation_food"
+
+    def test_stale_override_raises(self):
+        """An override for a value FDC does report would silently shadow it."""
+        ing = _ingredient(fdc_id=322559, nutrient_overrides={"sugars_g": 5.0})
+        with pytest.raises(ValueError, match="stale"):
+            _resolve_nutrients(ing, {"322559": dict(_DAIRY_NO_SUGARS, sugars_g=4.9)})
+
+    def test_unknown_override_field_raises(self):
+        ing = _ingredient(fdc_id=322559, nutrient_overrides={"sugar_g": 5.0})
+        with pytest.raises(ValueError, match="unknown nutrient override"):
+            _resolve_nutrients(ing, {"322559": dict(_DAIRY_NO_SUGARS)})
+
+
+def test_skim_based_diabetic_formula_is_no_longer_a_false_pass():
+    """The formula that passed at ~5.2 g sugars/serving while really ~8.7 g.
+
+    Lactose from 72 % skim and 14 % cream was counted as zero, which put a
+    formula over the diabetic cap on the compliant side of it.
+    """
+    from domain import CandidateFormula, validate_candidate
+
+    candidate = CandidateFormula(
+        product_name="Skim diabetic probe", description="", product_format="standard",
+        formulation_notes="",
+        ingredients=[
+            {"ref": "Milk, nonfat / skim", "percentage": 72},
+            {"ref": "Cream, heavy (36% fat)", "percentage": 14},
+            {"ref": "Sucrose (table sugar)", "percentage": 6},
+            {"ref": "Polydextrose (bulking fiber)", "percentage": 6},
+            {"ref": "Whey protein isolate (90%)", "percentage": 1.5},
+            {"ref": "Guar gum", "percentage": 0.3},
+            {"ref": "Locust bean gum", "percentage": 0.2},
+        ],
+    )
+    result = validate_candidate(candidate, active_modules=["diabetic"])
+    assert result.composition.nutrients_per_serving.sugars_g > 8.0
+    assert not result.validation.passed
+    assert any(v.rule_id == "diabetic.sugars" for v in result.validation.violations)

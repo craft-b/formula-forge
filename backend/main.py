@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import uuid
@@ -27,6 +28,7 @@ from graph import (
     regenerate_formula,
 )
 from generation import parse_and_validate as _parse_and_validate
+from grounding import has_quantities, ungrounded_quantities
 from llm import model_for, verify_model_available
 from budget import TokenBudget, estimate_tokens
 from observability import new_request_id, request_id_var, setup_logging
@@ -44,6 +46,7 @@ CHAT_RATE_LIMIT = settings.chat_rate_limit
 budget = TokenBudget(
     global_daily=settings.global_daily_tokens,
     session_daily=settings.session_daily_tokens,
+    client_daily=settings.client_daily_tokens,
 )
 limiter = Limiter(key_func=get_remote_address)
 
@@ -259,7 +262,9 @@ def meta():
         "dataset_version": repo.version,
         "ingredient_count": len(repo.ingredients),
         "modules": modules,
-        "model": settings.groq_model,
+        # The id this process calls, from the same resolver /health uses.
+        # settings.groq_model is wrong whenever LLM_PROVIDER is not groq.
+        "model": _active_model(),
     }
 
 
@@ -322,11 +327,9 @@ def _probe_llm_client() -> dict:
     status, detail = getattr(app.state, "model_check", ("unverified", "Not yet checked."))
     if status == "missing":
         return {"status": "unavailable", "detail": detail}
-    if status == "unverified":
-        # Could not confirm either way. Do not fail a possibly-working instance
-        # over a metadata call, but do not claim it is verified either.
-        return {"status": "ok",
-                "detail": f"API key configured; chat model initialized. {detail}"}
+    # "ok" and "unverified" both pass: an instance that could not confirm its
+    # model over a metadata call is not failed for it, and the detail says
+    # which of the two it is rather than claiming verification.
     return {"status": "ok", "detail": f"API key configured; chat model initialized. {detail}"}
 
 
@@ -407,6 +410,8 @@ async def _stream_agent(
       {"type": "token",     "content": str}                 — one per RAG token
       {"type": "formula",   "formula": dict, "response": str}
       {"type": "rejection", "rejection": dict, "response": str}
+      {"type": "grounding", "has_quantities": bool, "ungrounded": [str]}
+                                                              — after a RAG answer
       {"type": "error",     "message": str}
       {"type": "done",      "session_id": str}               — always last
     """
@@ -416,16 +421,21 @@ async def _stream_agent(
     try:
         if iteration_parent is not None:
             # Modify the existing formula from the delta request (F7).
-            raw = iterate_formula(user_message, iteration_parent,
-                                  modules=active_modules)
-            result = _resolve_formula(raw, active_modules, user_message,
-                                      parent=iteration_parent,
-                                      product_format=product_format)
+            # Both calls reach the provider synchronously (the repair inside
+            # _resolve_formula too), so they run in a worker thread. Called
+            # inline they held the event loop for the whole round trip and
+            # every other request on the instance - /health included - waited.
+            raw = await asyncio.to_thread(iterate_formula, user_message, iteration_parent,
+                                          modules=active_modules)
+            result = await asyncio.to_thread(_resolve_formula, raw, active_modules,
+                                             user_message, parent=iteration_parent,
+                                             product_format=product_format)
             for chunk in _emit_and_store(result, session_id, history):
                 yield chunk
         else:
             formula_buffer = ""
             streamed_text = ""
+            rag_context: list[str] = []
             is_formula_run = False
             graph_input = {"messages": history, "modules": active_modules}
             if force_formulate:
@@ -455,14 +465,33 @@ async def _stream_agent(
                         content = getattr(messages[-1], "content", "") or ""
                         if content:
                             formula_buffer = content
+                elif kind == "on_chain_end" and (node == "rag_agent" or event.get("name") == "rag_agent"):
+                    output = (event.get("data") or {}).get("output") or {}
+                    if isinstance(output, dict) and output.get("context") is not None:
+                        rag_context = output["context"]
 
-            if is_formula_run and formula_buffer:
+            if is_formula_run:
                 # The validation gate: no path emits LLM numbers to the client.
-                result = _resolve_formula(formula_buffer, active_modules, user_message,
-                                          product_format=product_format)
+                # An empty buffer (the provider refused the JSON) is still a
+                # formula attempt: it fails to parse and takes the one repair,
+                # rather than falling through to the Q&A bookkeeping below.
+                # In a thread for the same reason: a failed first attempt
+                # makes a synchronous repair call.
+                result = await asyncio.to_thread(_resolve_formula, formula_buffer,
+                                                 active_modules, user_message,
+                                                 product_format=product_format)
                 for chunk in _emit_and_store(result, session_id, history):
                     yield chunk
             else:
+                # Q&A prose is model-authored and cannot be recomputed, so the
+                # next best thing: say which of its figures the library supplied.
+                if streamed_text:
+                    grounding = {
+                        "type": "grounding",
+                        "has_quantities": has_quantities(streamed_text),
+                        "ungrounded": ungrounded_quantities(streamed_text, rag_context),
+                    }
+                    yield f"data: {json.dumps(grounding)}\n\n"
                 conversation_store[session_id] = history + [AIMessage(content=streamed_text)]
 
     except Exception as exc:
@@ -482,9 +511,11 @@ async def chat(request: Request, req: ChatRequest):
     session_id = req.session_id or str(uuid.uuid4())
 
     # Token budget: check and consume in one atomic step, so a burst cannot all
-    # pass the check before any of them consumes (see TokenBudget.reserve).
+    # pass the check before any of them consumes (see TokenBudget.reserve). The
+    # client cap is keyed on the caller's address because the session id is
+    # theirs to choose: a fresh one per request would otherwise reset the cap.
     est = estimate_tokens(req.message)
-    if not budget.reserve(session_id, est):
+    if not budget.reserve(session_id, est, client=get_remote_address(request)):
         return JSONResponse(
             status_code=429,
             content={"error": "Daily token budget exceeded. Please try again tomorrow."},

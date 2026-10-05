@@ -82,25 +82,40 @@ class TestTokenBudget:
 
     def test_allows_within_caps(self):
         b = TokenBudget(global_daily=1000, session_daily=500)
-        assert b.allow("s1", 400) is True
+        assert b.reserve("s1", 400) is True
 
     def test_blocks_over_session_cap(self):
         b = TokenBudget(global_daily=10000, session_daily=500)
-        b.record("s1", 400)
-        assert b.allow("s1", 200) is False   # 400+200 > 500
-        assert b.allow("s2", 200) is True    # different session
+        b.reserve("s1", 400)
+        assert b.reserve("s1", 200) is False   # 400+200 > 500
+        assert b.reserve("s2", 200) is True    # different session
 
     def test_blocks_over_global_cap(self):
         b = TokenBudget(global_daily=500, session_daily=10000)
-        b.record("s1", 400)
-        assert b.allow("s2", 200) is False   # 400+200 > 500 global
+        b.reserve("s1", 400)
+        assert b.reserve("s2", 200) is False   # 400+200 > 500 global
 
     def test_day_rollover_resets(self):
-        b = TokenBudget(global_daily=500, session_daily=500)
-        b.record("s1", 500)
-        assert b.allow("s1", 1) is False
+        b = TokenBudget(global_daily=500, session_daily=500, client_daily=500)
+        b.reserve("s1", 500, client="1.2.3.4")
+        assert b.reserve("s1", 1, client="1.2.3.4") is False
         b._day = b._day.replace(year=b._day.year - 1)  # force stale day
-        assert b.allow("s1", 500) is True    # rolled over -> reset
+        assert b.reserve("s1", 500, client="1.2.3.4") is True    # rolled over -> reset
+
+    def test_fresh_session_ids_do_not_reset_the_client_cap(self):
+        """Review H5: the session id is the caller's choice, so a new one per
+        request used to buy a new allowance every time."""
+        b = TokenBudget(global_daily=10_000, session_daily=500, client_daily=1000)
+        admitted = sum(b.reserve(f"s{i}", 400, client="1.2.3.4") for i in range(10))
+        assert admitted == 2                   # 800 of 1000; a third would exceed
+        assert b.client_usage("1.2.3.4") == 800
+        assert b.reserve("s99", 400, client="5.6.7.8") is True   # another caller
+
+    def test_refused_reservation_consumes_nothing_anywhere(self):
+        b = TokenBudget(global_daily=10_000, session_daily=10_000, client_daily=500)
+        assert b.reserve("s1", 600, client="1.2.3.4") is False
+        assert b.usage("s1") == (0, 0)
+        assert b.client_usage("1.2.3.4") == 0
 
 
 # ── Token budget (integration → 429) ──────────────────────────────────────────
@@ -136,3 +151,15 @@ def test_chat_rate_limited_after_threshold(formula_stream):
                      for _ in range(5)]
     # Under a 3/minute cap, at least one of five rapid calls is rejected.
     assert 429 in codes
+
+
+def test_chat_client_cap_holds_across_fresh_session_ids(formula_stream):
+    """End to end: rotating session_id no longer escapes the per-caller cap."""
+    est = main.estimate_tokens("hi")
+    capped = TokenBudget(global_daily=10**9, session_daily=10**9, client_daily=est * 2)
+    with patch("main.agent") as m, patch.object(main, "budget", capped):
+        m.astream_events = formula_stream
+        with TestClient(app) as client:
+            codes = [client.post("/api/chat", json={"message": "hi", "session_id": f"s{i}"}
+                                 ).status_code for i in range(4)]
+    assert codes == [200, 200, 429, 429]

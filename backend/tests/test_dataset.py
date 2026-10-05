@@ -128,6 +128,32 @@ def test_egg_yolk_reports_its_phosphorus(dataset):
     assert phosphorus > 300, f"egg_yolk phosphorus is {phosphorus} mg/100 g"
 
 
+def test_sugars_cover_declared_lactose(dataset):
+    """Lactose is a sugar, so a row's total sugars cannot be below its lactose.
+
+    Five FDC dairy rows shipped with sugars 0.0 beside a curated lactose of
+    2.8-5.0 g, because their source records carry no sugars row and the ETL
+    zero-filled it. The diabetic ruleset caps sugars per serving, so the error
+    ran toward a false pass.
+    """
+    offenders = [
+        (ing["id"], ing["nutrients_per_100g"]["sugars_g"], ing["functional"]["lactose_g"])
+        for ing in dataset["ingredients"]
+        if ing["nutrients_per_100g"]["sugars_g"] < ing["functional"]["lactose_g"]
+    ]
+    assert not offenders, f"(id, sugars_g, lactose_g) understated: {offenders}"
+
+
+def test_overridden_fields_are_labelled(dataset):
+    """A value a human supplied for an FDC row says so in its provenance."""
+    for ing in dataset["ingredients"]:
+        overrides = ing["provenance"]["curated_overrides"]
+        if ing["provenance"]["source"] == "curated":
+            assert overrides == [], ing["id"]
+    skim = next(i for i in dataset["ingredients"] if i["id"] == "milk_skim")
+    assert skim["provenance"]["curated_overrides"] == ["sugars_g"]
+
+
 def test_curated_rows_may_still_assert_a_zero(dataset):
     """The guard must not force nonsense onto refined ingredients.
 

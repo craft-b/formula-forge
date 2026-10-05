@@ -171,6 +171,20 @@ class TestDetectIntent:
     def test_bare_product_noun_alone_does_not_force_formulation(self, message):
         assert detect_intent(message) == "search"
 
+    # Follow-up questions name "this formula" constantly. The bare-noun rule
+    # used to send every one of them to the formulator (review H4).
+    @pytest.mark.parametrize("message", [
+        "Why does this formula use more cream than a standard recipe?",
+        "What is the phosphorus in this formula?",
+        "how does the formulation stay scoopable?",
+    ])
+    def test_questions_about_a_formula_stay_questions(self, message):
+        assert detect_intent(message) == "search"
+
+    @pytest.mark.parametrize("message", ["renal formula please", "vegan formula"])
+    def test_bare_formula_brief_still_formulates(self, message):
+        assert detect_intent(message) == "formulate"
+
 
 # ── Food search ───────────────────────────────────────────────────────────────
 
@@ -190,6 +204,37 @@ class TestSearchFoods:
     def test_short_words_are_ignored(self):
         # "a", "of", "in" are under 3 chars and should not affect scoring
         assert search_foods("a protein of in") == search_foods("protein")
+
+
+def _names(query: str, k: int) -> list[str]:
+    return [line.split(":")[0] for line in search_foods(query)[:k]]
+
+
+class TestSearchRelevance:
+    """The five realistic questions from the readiness review (H8)."""
+
+    def test_named_ingredient_comes_first(self):
+        assert _names("How much potassium is in whole milk?", 1) == ["Milk, whole, 3.25% fat"]
+
+    def test_role_question_finds_the_role(self):
+        # Used to return coconut cream, cream cheese, heavy cream: "ice cream"
+        # matched every cream row and no sweetener was retrieved.
+        top = _names("Which sweetener is best for a diabetic ice cream?", 3)
+        assert set(top) == {"Allulose (D-psicose)", "Erythritol", "Sucralose (high-intensity)"}
+
+    def test_low_nutrient_orders_by_that_nutrient(self):
+        # Used to rank low-fat buttermilk first, on the word "low".
+        top = _names("What's a good low-phosphorus protein source?", 3)
+        assert top[0] == "Whey protein isolate (90%)"  # 150 mg vs 700 mg for the others
+        assert all("protein" in n or "casein" in n for n in top)
+
+    def test_comparison_returns_both_ingredients(self):
+        top = _names("Compare coconut cream and heavy cream for fat content", 2)
+        assert set(top) == {"Cream, heavy (36% fat)", "Coconut cream"}
+
+    def test_stabilizer_question_returns_stabilizers(self):
+        assert set(_names("What stabilizer should I use to reduce iciness?", 3)) == {
+            "Carrageenan (lambda)", "Guar gum", "Locust bean gum"}
 
 
 # ── Formula JSON parsing ──────────────────────────────────────────────────────
@@ -442,4 +487,6 @@ class TestRagAgentGrounding:
 
         graph.rag_agent({"messages": [HumanMessage(content="what is unobtainium")]})
         text = " ".join(m.content for m in captured["messages"] if hasattr(m, "content"))
-        assert "No matching foods found" in text
+        assert "No matching ingredients in the governed library" in text
+        # The model is told not to fill the gap from memory or cite a source.
+        assert "do not supply a value from memory" in text

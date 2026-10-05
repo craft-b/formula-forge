@@ -1,3 +1,4 @@
+import logging
 import re
 from typing import Literal, Optional, TypedDict, List
 
@@ -5,6 +6,8 @@ from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from llm import get_llm
 from json_utils import extract_json_block
+
+logger = logging.getLogger(__name__)
 
 llm = get_llm()
 # Formula generation uses Groq JSON mode so the model must emit a single JSON
@@ -32,13 +35,18 @@ _FORMULATION_RE = re.compile(
     r"\s+(?:me\s+)?(?:an?|some)?(?:\s+[\w-]+){0,4}\s+" + _PRODUCT_NOUN +
     r"|new\s+" + _PRODUCT_NOUN +
     r"|" + _PRODUCT_NOUN + r"\s+for\b"
-    # Bare noun, no verb: operators type "renal formula" and "vegan formula
-    # please". Restricted to the unambiguous nouns — a bare "dessert" turns up
-    # in plenty of questions, but nobody asks this system "what is a formula".
-    r"|formulations?|formulas?"
     r")",
     re.IGNORECASE,
 )
+
+# Bare noun, no verb: operators type "renal formula" and "vegan formula
+# please". Restricted to the unambiguous nouns — a bare "dessert" turns up in
+# plenty of questions. It used to sit inside _FORMULATION_RE and so fired on
+# questions too, and after a first formula the natural follow-up is a question
+# about "this formula": "why does this formula use more cream?" was sent to the
+# formulator and came back as a new formula. detect_intent now applies it only
+# to messages that are not phrased as questions.
+_BARE_FORMULA_RE = re.compile(r"\b(?:formulations?|formulas?)\b", re.IGNORECASE)
 
 
 class AgentState(TypedDict, total=False):
@@ -50,6 +58,9 @@ class AgentState(TypedDict, total=False):
     # Active dietary-constraint module ids — rendered into the formula prompt
     # as design targets so proposals aim at the limits the gate will enforce.
     modules: Optional[List[str]]
+    # The governed rows the RAG answer was given. main.py checks every figure in
+    # the answer against these (grounding.py) and tells the UI which were not.
+    context: Optional[List[str]]
 
 
 # A bare product noun anywhere in the message, and the shapes a question takes.
@@ -89,6 +100,8 @@ def detect_intent(message: str) -> Literal["formulate", "search"]:
     as a question.
     """
     if _FORMULATION_RE.search(message):
+        return "formulate"
+    if _BARE_FORMULA_RE.search(message) and not _QUESTION_RE.search(message):
         return "formulate"
     if (_PRODUCT_NOUN_RE.search(message)
             and detect_modules(message)
@@ -159,9 +172,31 @@ _ITERATION_RE = re.compile(
 )
 
 
+# A request phrased as a question is still a request: "can you make it
+# sweeter?", "could we swap the cream?". So is a message that opens with the
+# change itself ("swap the cream?"). Neither is a question about the formula.
+_CHANGE_REQUEST_RE = re.compile(
+    r"^\s*(?:please\s+|(?:can|could|would|will)\s+(?:you|we)\s+(?:please\s+)?)?"
+    r"(?:now\s+)?(?:make|reduce|lower|increase|raise|bump|swap|replace|substitute"
+    r"|hold|keep|remove|drop|cut|add|try|use)\b",
+    re.I,
+)
+
+
 def detect_iteration(message: str) -> bool:
-    """True if the message reads as a modification of an existing formula."""
-    return bool(_ITERATION_RE.search(message))
+    """True if the message reads as a modification of an existing formula.
+
+    The change vocabulary is broad on purpose (a false positive only means
+    "treat this as a tweak"), which is exactly why questions need excluding:
+    "why does this formula use more cream?" contains "more" and was rewritten
+    into a new formula instead of being answered. A question-shaped message is
+    an iteration only when it is a change request in question form.
+    """
+    if not _ITERATION_RE.search(message):
+        return False
+    if _QUESTION_RE.search(message) and not _CHANGE_REQUEST_RE.search(message):
+        return False
+    return True
 
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
@@ -178,27 +213,100 @@ def _ingredient_context_line(ing) -> str:
     )
 
 
+# Words that carry no ingredient identity. "low" and "high" are the costly ones:
+# "low-phosphorus protein" matched "Buttermilk, low fat" on "low" and ranked it
+# first. They are read as an ordering instruction instead (_NUTRIENT_ORDER).
+_SEARCH_STOPWORDS = frozenset("""
+    about added amount and any are best between can compare content contain contains could
+    does for from good has have high how into its less low lower lowest many more much need
+    per reduce reduced rich serving should source than that the this use using want what
+    which will with would your
+""".split())
+
+# Query words that name a functional role rather than an ingredient. "Which
+# sweetener is best?" shares no word with "Erythritol" or "Allulose"; it shares
+# a role with them.
+_ROLE_TERMS: dict[str, frozenset[str]] = {
+    "sweetener": frozenset({"sweetener", "polyol", "high_intensity"}),
+    "sweeteners": frozenset({"sweetener", "polyol", "high_intensity"}),
+    "sweetening": frozenset({"sweetener", "polyol", "high_intensity"}),
+    "polyol": frozenset({"polyol"}), "polyols": frozenset({"polyol"}),
+    "stabilizer": frozenset({"stabilizer"}), "stabilizers": frozenset({"stabilizer"}),
+    "stabiliser": frozenset({"stabilizer"}), "stabilisers": frozenset({"stabilizer"}),
+    "thickener": frozenset({"stabilizer"}), "thickeners": frozenset({"stabilizer"}),
+    "emulsifier": frozenset({"emulsifier"}), "emulsifiers": frozenset({"emulsifier"}),
+    "fiber": frozenset({"bulking_fiber", "mimetic"}), "fibre": frozenset({"bulking_fiber", "mimetic"}),
+}
+
+# "low phosphorus", "lowest sodium", "high protein": a direction and a field.
+# Ties on relevance are broken by that nutrient, so the answer the question
+# asked for comes first. A diabetic brief asks for low sugars.
+_NUTRIENT_WORDS = {
+    "phosphorus": "phosphorus_mg", "potassium": "potassium_mg", "sodium": "sodium_mg",
+    "salt": "sodium_mg", "calcium": "calcium_mg", "sugar": "sugars_g", "sugars": "sugars_g",
+    "fat": "fat_g", "protein": "protein_g", "calorie": "energy_kcal", "calories": "energy_kcal",
+    "carb": "carbs_g", "carbs": "carbs_g", "fiber": "fiber_g", "fibre": "fiber_g",
+}
+_NUTRIENT_ORDER = re.compile(
+    r"\b(low|lower|lowest|reduced|less|high|higher|highest|rich|more)[\s-]+(?:in\s+)?"
+    r"(" + "|".join(_NUTRIENT_WORDS) + r")\b", re.I)
+_DIRECTION = {"low": 1, "lower": 1, "lowest": 1, "reduced": 1, "less": 1,
+              "high": -1, "higher": -1, "highest": -1, "rich": -1, "more": -1}
+
+
+def _nutrient_order(query: str) -> Optional[tuple[str, int]]:
+    """(field, +1 ascending | -1 descending) when the query asks for an extreme."""
+    m = _NUTRIENT_ORDER.search(query)
+    if m:
+        return _NUTRIENT_WORDS[m.group(2).lower()], _DIRECTION[m.group(1).lower()]
+    if re.search(r"\b(?:pre)?diabet\w*", query, re.I):
+        return "sugars_g", 1
+    return None
+
+
 def search_foods(query: str, n: int = 8) -> List[str]:
     """Retrieve governed ingredients matching the query, with real nutrients.
 
-    Retrieval now runs over the governed ingredient library (which carries full
-    USDA-sourced nutrient vectors) rather than the old names-only usda_foods.json,
-    so RAG answers are grounded in real numbers. Keyword scoring with
-    word-boundary tokenization (so "milk" no longer matches "buttermilk") and a
-    length filter; the library is already deduplicated (F8). Vector search is the
-    Phase B upgrade (spec §2.2) once a managed store replaces the free tier.
+    Retrieval runs over the governed ingredient library, so RAG answers are
+    grounded in real numbers. Deterministic keyword scoring with word-boundary
+    tokenization (so "milk" does not match "buttermilk"), plus three rules found
+    by testing realistic questions (readiness review H8):
+
+    * the product being made ("ice cream", "gelato", ...) is removed first —
+      it describes the target, and "ice cream" matched every cream row;
+    * role words ("sweetener", "stabilizer") match the ingredients in that
+      role, which share no name word with the question;
+    * "low/high <nutrient>" (and "diabetic", for sugars) orders equally
+      relevant rows by that nutrient instead of alphabetically.
+
+    Vector search is the Phase B upgrade (spec §2.2) once a managed store
+    replaces the free tier.
     """
-    tokens = {w for w in _WORD_RE.findall(query.lower()) if len(w) > 2}
-    if not tokens:
+    text = _PRODUCT_NOUN_RE.sub(" ", query.lower())
+    words = {w for w in _WORD_RE.findall(text) if len(w) > 2} - _SEARCH_STOPWORDS
+    wanted_roles = set().union(*(_ROLE_TERMS.get(w, frozenset()) for w in words))
+    # Role words are matched through wanted_roles. Nutrient words describe what
+    # every row has, so they do not identify one ("potassium in whole milk") —
+    # except the few that are also ingredient names ("whey protein", "salt").
+    name_tokens = ((words - set(_ROLE_TERMS) - set(_NUTRIENT_WORDS))
+                   | (words & {"protein", "fat", "salt", "sugar"}))
+    if not name_tokens and not wanted_roles:
         return []
+    order = _nutrient_order(query)
     from domain import get_repository
     scored = []
     for ing in get_repository().ingredients:
-        haystack = set(_WORD_RE.findall(f"{ing.name} {ing.role}".lower()))
-        score = len(tokens & haystack)
+        haystack = set(_WORD_RE.findall(f"{ing.name} {ing.role.replace('_', ' ')}".lower()))
+        score = len(name_tokens & haystack) + (2 if ing.role in wanted_roles else 0)
         if score > 0:
             scored.append((score, ing))
-    scored.sort(key=lambda pair: (-pair[0], pair[1].name))
+
+    def rank(pair):
+        score, ing = pair
+        value = getattr(ing.nutrients_per_100g, order[0]) * order[1] if order else 0
+        return (-score, value, ing.name)
+
+    scored.sort(key=rank)
     return [_ingredient_context_line(ing) for _, ing in scored[:n]]
 
 
@@ -216,7 +324,7 @@ def route(state: AgentState) -> Literal["formula_agent", "rag_agent"]:
 
 
 def rag_agent(state: AgentState):
-    """Handle ingredient and nutrition questions with USDA context + conversation history.
+    """Handle ingredient and nutrition questions with library context + conversation history.
 
     Passes the last 10 messages to the LLM so follow-up questions ("what about
     the sodium content?") resolve correctly. The window is capped at 10 to stay
@@ -226,19 +334,33 @@ def rag_agent(state: AgentState):
     user_messages = [m for m in state["messages"] if isinstance(m, HumanMessage)]
     user_message = user_messages[-1].content
     foods = search_foods(user_message)
-    context = "\n".join(f"- {f}" for f in foods) if foods else "No matching foods found in USDA database."
+    # Labelled as the governed library, not "USDA": the library mixes FDC rows
+    # with curated ones, and the old label invited the model to cite USDA for
+    # figures it had made up.
+    context = ("\n".join(f"- {f}" for f in foods) if foods
+               else "No matching ingredients in the governed library.")
 
     system = SystemMessage(content="""You are FormulaForge, an AI food formulation assistant.
 You help food scientists, chefs, and product developers with ingredient selection,
 nutrition analysis, and recipe formulation. Be concise, specific, and practical.
-Reference conversation history when relevant.""")
+Reference conversation history when relevant.
+
+Nutrient figures: state a number ONLY if it appears in the governed ingredient
+rows provided below, and give it per 100 g as written there. If the question asks
+about a nutrient or an ingredient those rows do not include, say plainly that it
+is not in FormulaForge's governed library — do not supply a value from memory, do
+not attribute a value to USDA or any other source, and do not compute daily-value
+percentages. Every figure you write is checked against the rows, and any that do
+not match are shown to the user as unverified.""")
 
     # Include last 10 messages so the LLM sees conversation context
     history = state["messages"][-10:]
-    context_note = SystemMessage(content=f"Relevant USDA foods for this query:\n{context}")
+    context_note = SystemMessage(
+        content=f"Governed ingredient library rows for this query (per 100 g):\n{context}")
 
     response = llm.invoke([system, context_note] + history)
-    return {"messages": state["messages"] + [AIMessage(content=response.content)]}
+    return {"messages": state["messages"] + [AIMessage(content=response.content)],
+            "context": foods}
 
 
 _FORMULA_SYSTEM = SystemMessage(content="""You are FormulaForge, an expert frozen-dessert \
@@ -363,9 +485,41 @@ Requirements:
     return [_FORMULA_SYSTEM, prompt]
 
 
+def _json_mode_rejection(exc: Exception) -> Optional[str]:
+    """The model's partial output if `exc` is a JSON-mode validation refusal.
+
+    Groq validates JSON-mode output server-side and answers 400
+    `json_validate_failed` when the model produced something unparseable. That
+    is a malformed proposal, not a broken request - the same failure the repair
+    path exists for - but raised as an exception it escaped the formula node and
+    reached the user as "BadRequestError", skipping the one repair entirely.
+    Returns None for any other error, which should propagate.
+    """
+    body = getattr(exc, "body", None)
+    if not isinstance(body, dict):
+        return None
+    err = body.get("error", body)
+    if not isinstance(err, dict) or err.get("code") != "json_validate_failed":
+        return None
+    return err.get("failed_generation") or ""
+
+
 def _invoke_formula(messages: list) -> str:
-    """Call the JSON-mode LLM and return the extracted JSON string."""
-    response = formula_llm.invoke(messages)
+    """Call the JSON-mode LLM and return the extracted JSON string.
+
+    A provider-side JSON validation failure returns the partial generation
+    (often empty) instead of raising, so it parses as a failed first attempt
+    and takes the single repair like any other malformed proposal.
+    """
+    try:
+        response = formula_llm.invoke(messages)
+    except Exception as exc:
+        partial = _json_mode_rejection(exc)
+        if partial is None:
+            raise
+        logger.warning("Provider rejected JSON-mode output (json_validate_failed); "
+                       "treating as an unparseable attempt")
+        return extract_json_block(partial)
     return extract_json_block(response.content)
 
 

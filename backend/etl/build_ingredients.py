@@ -26,15 +26,15 @@ from datetime import date
 
 from etl.curated_ingredients import CURATED_INGREDIENTS
 from etl.nutrient_map import (
-    CLINICAL_MINERAL_FIELDS,
     DEFAULT_ZERO_FIELDS,
     ENERGY_NUMBERS,
     NUTRIENT_FIELDS,
     NUTRIENT_NUMBERS,
+    RULESET_GATED_FIELDS,
 )
 
-DATASET_VERSION = "2026.09.0"
-TRANSFORM_VERSION = "etl-1.0.0"
+DATASET_VERSION = "2026.10.0"
+TRANSFORM_VERSION = "etl-1.1.0"
 
 _HERE = os.path.dirname(__file__)
 _BACKEND = os.path.dirname(_HERE)
@@ -101,24 +101,42 @@ def _resolve_nutrients(ing: dict, fdc_data: dict[str, dict[str, float]]) -> tupl
         source = "curated"
         fid = None
 
+    # Human-supplied values for fields an FDC record omits. Fill gaps only: an
+    # override for a field the record does report is stale, and silently
+    # preferring either value would hide that.
+    overrides = ing.get("nutrient_overrides") or {}
+    for field in overrides:
+        if field not in NUTRIENT_FIELDS:
+            raise ValueError(f"{ing['id']}: unknown nutrient override '{field}'.")
+        if source == "curated":
+            raise ValueError(f"{ing['id']}: nutrient_overrides only apply to FDC rows; "
+                             "put the value in nutrients_per_100g.")
+        if field in raw:
+            raise ValueError(f"{ing['id']}: override for '{field}' but FDC {fid} reports "
+                             "it. Remove the stale override.")
+
     vector: dict[str, float] = {}
+    overridden: list[str] = []
     for field in NUTRIENT_FIELDS:
         if field == "energy_kcal":
             continue  # resolved after macros so Atwater fallback can run
         if field in raw:
             vector[field] = round(float(raw[field]), _ROUND[field])
+        elif field in overrides:
+            vector[field] = round(float(overrides[field]), _ROUND[field])
+            overridden.append(field)
         elif field in DEFAULT_ZERO_FIELDS:
             vector[field] = 0.0
-        elif field in CLINICAL_MINERAL_FIELDS and source == "curated":
+        elif field in RULESET_GATED_FIELDS and source == "curated":
             # A curated row is a human assertion, including an assertion of zero.
             vector[field] = 0.0
         else:
             raise ValueError(
                 f"{ing['id']}: source record has no '{field}' row. "
-                "Zero is not a safe substitute for a mineral the clinical "
+                "Zero is not a safe substitute for a value the clinical "
                 "rulesets check — it makes a formula look compliant. Either "
                 "point fdc_id at a record that reports it, or add an explicit "
-                "curated nutrients_per_100g override."
+                "curated nutrient_overrides entry."
             )
 
     # Energy: use the FDC/curated value when present, else derive via Atwater
@@ -138,6 +156,7 @@ def _resolve_nutrients(ing: dict, fdc_data: dict[str, dict[str, float]]) -> tupl
         "source": source,
         "fdc_id": ing["fdc_id"] if ing.get("fdc_id") else None,
         "energy_atwater_derived": energy_derived,
+        "curated_overrides": overridden,
         "dataset_version": DATASET_VERSION,
         "transform_version": TRANSFORM_VERSION,
     }

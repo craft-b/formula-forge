@@ -144,3 +144,18 @@ class TestExplicitProductFormat:
         types = {e.get("type") for e in events}
         assert "token" in types
         assert "formula" not in types and "rejection" not in types and "error" not in types
+
+
+def test_meta_and_health_report_the_same_model(monkeypatch):
+    """Review M2: /api/meta read settings.groq_model, which is not the model
+    called when LLM_PROVIDER is anything but groq; /health resolved it properly."""
+    from fastapi.testclient import TestClient
+
+    from main import app
+
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_MODEL", "gpt-probe-1")
+    monkeypatch.setattr("main.settings.llm_provider", "openai")
+    client = TestClient(app)
+    assert client.get("/api/meta").json()["model"] == "gpt-probe-1"
+    assert client.get("/health").json()["model"] == "gpt-probe-1"
