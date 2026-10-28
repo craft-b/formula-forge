@@ -179,6 +179,21 @@ export default function IdeaStream() {
   const [data, setData] = useState<IdeasPayload | null>(null)
   const [error, setError] = useState(false)
 
+  // Seconds spent loading.
+  //
+  // The "waking up" notice used to live only on the error branch, but a cold
+  // start is not an error -- the request does not fail, it waits, for about
+  // 45 seconds while the free tier starts a host. So the one state a first
+  // visitor actually lands in was the one that said nothing, and the
+  // explanation was reserved for the case that mostly does not happen.
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    if (data || error) return
+    const t = setInterval(() => setElapsed((e) => e + 1), 1000)
+    return () => clearInterval(t)
+  }, [data, error])
+
   useEffect(() => {
     document.title = "FormulaForge — Idea Stream"
     fetch(`${API_URL}/api/ideas`)
@@ -250,7 +265,15 @@ export default function IdeaStream() {
           )}
           {!data && !error && (
             <div className="rounded-2xl border border-slate-200 bg-white px-6 py-5 text-sm text-slate-500">
-              Loading ranked ideas…
+              {elapsed < 6 ? (
+                "Loading ranked ideas…"
+              ) : (
+                <>
+                  Loading ranked ideas… {elapsed}s. The API is on free hosting and
+                  sleeps when idle, so the first request after a quiet period spends
+                  about 45 seconds waking it.
+                </>
+              )}
             </div>
           )}
           {data?.ideas.map((idea) => <IdeaCard key={idea.id} idea={idea} />)}
