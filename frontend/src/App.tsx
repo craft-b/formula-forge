@@ -23,7 +23,26 @@ interface Run {
   grounding?: { has_quantities: boolean; ungrounded: string[] }
 }
 
-// ── Pipeline progress (shown while a run is in flight) ───────────────────────
+// ── Pipeline progress (shown while a run is in flight) ───────────────────
+
+// This used to advance through all five stages on a 1,400 ms timer, which made
+// it a progress bar for a pipeline it was not watching. The client observes
+// exactly one transition -- the formula arrives, or it does not -- and the
+// server sends no per-stage events, so every dot it filled in was asserted
+// rather than known.
+//
+// It was also wrong in the ordinary case, not just at the edges. The model call
+// is almost the whole wall time; resolve, compute, validate and score run in
+// milliseconds after it returns. So the old display spent 1.4 seconds on the
+// step that takes ten seconds and then narrated four steps that were already
+// over, or had not started because the request was still waking a sleeping
+// host.
+//
+// A system whose entire claim is that no number reaches a user unless it was
+// computed should not ship a progress indicator that invents its own state.
+// What is shown now is the one thing in flight, and the rest as what happens
+// next -- which also says the architecture out loud: the slow, uncertain part
+// is the model, and the deterministic part is too fast to watch.
 
 const PIPELINE_STEPS = [
   { label: "Propose", detail: "LLM drafts an ingredient structure" },
@@ -33,39 +52,71 @@ const PIPELINE_STEPS = [
   { label: "Score", detail: "scoopability and cost estimates" },
 ]
 
+/** Seconds in flight before we say the host is probably asleep. */
+const COLD_START_HINT_S = 8
+
 function PipelineProgress() {
-  const [step, setStep] = useState(0)
+  // Ticks rather than a clock read: Date.now() during render is an impure
+  // call, and the only thing this number is used for is a threshold. If the
+  // tab is backgrounded the browser throttles the timer and this undercounts,
+  // which is the right way round -- nobody is reading the hint then anyway.
+  const [elapsed, setElapsed] = useState(0)
+
   useEffect(() => {
-    const t = setInterval(() => setStep((s) => Math.min(s + 1, PIPELINE_STEPS.length - 1)), 1400)
+    const t = setInterval(() => setElapsed(e => e + 1), 1000)
     return () => clearInterval(t)
   }, [])
+
+  // A warm formula run answers well inside this. Past it the overwhelmingly
+  // likely explanation is the free tier's cold start, and the README's warning
+  // is no use to someone who arrived from a link and never read it.
+  const likelyColdStart = elapsed >= COLD_START_HINT_S
+
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-6 py-5 ff-rise" role="status" aria-label="Formulation pipeline running">
+    <div className="rounded-2xl border border-slate-200 bg-white px-6 py-5 ff-rise" role="status" aria-label="Formulation running">
       <div className="flex items-center gap-0">
         {PIPELINE_STEPS.map((s, i) => (
           <div key={s.label} className="flex items-center">
             <div className="flex flex-col items-center gap-1.5">
               <span
-                className={`w-2.5 h-2.5 rounded-full transition-colors ${
-                  i < step ? "bg-teal-500" : i === step ? "bg-teal-500 animate-pulse" : "bg-slate-200"
+                className={`w-2.5 h-2.5 rounded-full ${
+                  i === 0 ? "bg-teal-500 animate-pulse" : "bg-slate-200"
                 }`}
               />
-              <span className={`text-micro font-medium ${i <= step ? "text-slate-700" : "text-slate-500"}`}>
+              <span className={`text-micro font-medium ${i === 0 ? "text-slate-700" : "text-slate-500"}`}>
                 {s.label}
               </span>
             </div>
             {i < PIPELINE_STEPS.length - 1 && (
-              <span className={`w-8 sm:w-14 h-px mx-1 mb-4 transition-colors ${i < step ? "bg-teal-400" : "bg-slate-200"}`} />
+              <span className="w-8 sm:w-14 h-px mx-1 mb-4 bg-slate-200" />
             )}
           </div>
         ))}
-        <span className="ml-auto mb-4 hidden sm:inline text-meta text-slate-500">
+        {/*
+          xl, not sm. Five labelled dots and four connectors already fill a
+          card this wide, so at the 640px threshold this caption wrapped onto
+          two lines and sat on top of the "Score" label. It is a gloss, not
+          information -- it hides rather than crowds the thing it describes.
+        */}
+        <span className="ml-auto mb-4 hidden xl:inline whitespace-nowrap text-meta text-slate-500">
           LLM proposes · domain verifies
         </span>
       </div>
+
       <p className="text-meta mt-1.5 ff-shimmer-text w-fit">
-        {PIPELINE_STEPS[step].label} — {PIPELINE_STEPS[step].detail}…
+        {PIPELINE_STEPS[0].label} — {PIPELINE_STEPS[0].detail}…
       </p>
+      <p className="text-meta mt-1 text-slate-500">
+        The four deterministic steps run after it returns, in milliseconds.
+      </p>
+
+      {likelyColdStart && (
+        <p className="text-meta mt-2 text-slate-600 border-t border-slate-100 pt-2">
+          {elapsed}s. The demo API is on free hosting and sleeps when idle — the
+          first request after a quiet period spends about 45 seconds waking it
+          before any of this starts.
+        </p>
+      )}
     </div>
   )
 }

@@ -31,7 +31,12 @@ from generation import parse_and_validate as _parse_and_validate
 from grounding import has_quantities, ungrounded_quantities
 from llm import model_for, verify_model_available
 from budget import TokenBudget, estimate_tokens
-from observability import new_request_id, request_id_var, setup_logging
+from observability import (
+    new_request_id,
+    request_id_var,
+    setup_logging,
+    warn_once_if_proxy_untrusted,
+)
 
 setup_logging(settings.log_level)
 logger = logging.getLogger(__name__)
@@ -185,6 +190,14 @@ async def request_id_middleware(request: Request, call_next):
     """Attach a correlation id to every request for traceable structured logs."""
     rid = request.headers.get("X-Request-ID") or new_request_id()
     token = request_id_var.set(rid)
+
+    # A misconfigured proxy does not fail; it quietly merges every caller into
+    # one. Checked here because the evidence only exists on a real request, and
+    # logged at most once so a busy process does not repeat it.
+    warn_once_if_proxy_untrusted(
+        request.client.host if request.client else None,
+        request.headers.get("x-forwarded-for"),
+    )
     try:
         response = await call_next(request)
     except Exception:
