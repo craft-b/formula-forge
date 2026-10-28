@@ -1,6 +1,18 @@
 # FormulaForge — Enterprise Design Specification (v1.0, Stage 1)
 
-**Status:** Build-ready spec for a builder model. Companion document: `docs/AUDIT_FINDINGS.md` (finding IDs `F1–F20` referenced throughout).
+> **Status: historical — this is the target that was built, not a plan.**
+> Written 2026-07-01 alongside [`AUDIT_FINDINGS.md`](AUDIT_FINDINGS.md), when the
+> codebase was the generic clinical-nutrition chat app described below as the
+> "migration starting point". That migration happened: the validation gate, the
+> governed ingredient library, the constraint rulesets and the cost controls all
+> exist. Read it for the reasoning behind the design; read the
+> [README](../README.md) for the system as it actually stands, including the
+> parts this spec describes that were deliberately **not** built.
+>
+> Kept rather than rewritten because a spec edited to match what got built stops
+> being evidence of anything.
+
+**Status (as written):** Build-ready spec for a builder model. Companion document: `docs/AUDIT_FINDINGS.md` (finding IDs `F1–F20` referenced throughout).
 **Product target per brief:** AI formulation system for **ice cream / frozen desserts** meeting **health-and-wellness and medical-dietary constraints while preserving eating quality**. The current codebase (generic clinical-nutrition chat) is the migration starting point, not the target.
 **Prime directive:** the LLM proposes; deterministic physics and a governed composition database verify. No formula reaches a user without passing the validation gate (§4.3).
 

@@ -423,6 +423,10 @@ runs in CI without an API key. Coverage by area:
   are reported as ungrounded; library figures, rounding and the per-100 g basis are not.
 - **Responsiveness** (`test_responsiveness.py`) — `/health` stays responsive while a
   provider call is in flight, and every provider client is built with a timeout.
+- **Proxy trust** (`test_proxy_trust.py`) — that an untrusted proxy is detected from the
+  disagreement between `client.host` and `X-Forwarded-For`, that a correctly configured
+  one stays silent, that the warning names the fix, and that it fires once per process
+  rather than once per request.
 
 ### Evaluating the model, not just the math
 
@@ -484,7 +488,7 @@ The system as it stands, measured rather than asserted:
 | Governed ingredient library | 34 ingredients, dataset `2026.10.0`, every row with a full nutrient vector and provenance |
 | Model-authored numbers in a formulation | 0, enforced by type and pinned by test |
 | Model-authored numbers in a Q&A answer | checked against the retrieved rows; any unmatched figure is shown as unverified |
-| Domain + gate test suite | 411 tests, no live LLM, deterministic in CI |
+| Domain + gate test suite | 420 tests, no live LLM, deterministic in CI |
 | Golden compliance set | 18 brief-to-formula cases, 100% schema-valid, 100% compliance accuracy |
 | Routing eval | 46 labelled briefs, 100% intent routing, 100% ruleset activation |
 | Repairs per request | at most 1, structurally — `_resolve_formula()` has no loop |
@@ -565,6 +569,17 @@ uvicorn is told to trust the forwarded headers (`FORWARDED_ALLOW_IPS=*`, safe on
 the app is reachable solely through the proxy). Without it, the rate limit and the
 address token cap are shared by every caller — which is why the address cap defaults to a
 tenth of the global one rather than something a single demo session could exhaust.
+
+The default is still the safe one rather than the convenient one, because `*` on a
+directly reachable process lets any caller spoof `X-Forwarded-For` and walk past both
+controls. What changed is that the misconfiguration is no longer silent: when uvicorn
+trusts a proxy it rewrites `client.host` to the first `X-Forwarded-For` entry, so the two
+disagreeing is the untrusted case, and `warn_once_if_proxy_untrusted()` says so in the log
+on the first request that proves it — naming both addresses and the variable that fixes
+it. Empirical rather than a guess about the host, and once per process rather than per
+request. A control that has quietly become a second global cap is exactly the kind of
+failure this codebase keeps finding, and the fix for that class is always to make the
+process say so.
 
 **Token accounting that matches the bill.** `estimate_tokens()` counts the user's message
 at roughly four characters per token plus a fixed output reserve. It does not count the

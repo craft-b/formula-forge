@@ -5,6 +5,8 @@ Phases 1–4 were read-and-run only; nothing outside this file has been changed.
 
 ## 1. Verdict
 
+> **Superseded — see §6.** This verdict is the 2026-09-30 snapshot. Every finding below has since been fixed or explicitly deferred, and the live demo was re-verified against `origin/main` on 2026-10-27. Kept unedited because a review that quietly rewrites its own verdict is worth less than one that shows what it found.
+
 Not ready to show yet: the engineering is unusually careful, but two of the README's
 headline claims do not hold — a gap in the governed data lets a diabetic formula pass
 that should fail, and the Q&A path streams model-invented nutrient values, with fabricated
@@ -121,7 +123,7 @@ offline routing eval, and (for frontend changes) eslint and a production build.
 |---|---|---|---|
 | B1 | Fixed | `709ac5a` | Dataset rebuilt from the FDC CSVs as **`2026.10.0`** (planned `2026.09.1`; date-versioned to the rebuild). Only `sugars_g` and provenance changed. Golden set and routing eval still 100 %. |
 | B2 | Fixed | `3a45ebd` | Grounded prompt, server-side figure check, UI label, scoped README claim. Re-run live: both out-of-library questions now answer "not in the governed library"; the in-library one is reported grounded. |
-| B3 | **Open — needs you** | — | Redeploy Render from `main` after merge; set `APP_VERSION` to the commit SHA and `FORWARDED_ALLOW_IPS=*` (see H5). |
+| B3 | Fixed — verified live | `b2aeec9` | Render serves `origin/main`: `/health` reports `"version":"b2aeec9"` and `dataset 2026.10.0`, matching the repo. `APP_VERSION` is left unset by design — `d09fe11` made `/health` fall back to Render's deployed commit, which is what that SHA is. Re-verified 2026-10-27: one live formula run through `/api/chat` returned `"passed": true` with `notes_contain_numeric_claims: false`, and the CORS preflight allows `https://formula-forge-chi.vercel.app` while `https://evil.example` is refused with 400. `FORWARDED_ALLOW_IPS=*` is **not** externally observable — still to confirm in the Render dashboard (H5). |
 | H1 | Fixed | `1cf1e3a` | Captured from the local stack on `2026.10.0`. |
 | H2 | Fixed | `0460d23` | `/health` regression test fails at 1.03 s with the inline calls restored. |
 | H3 | Fixed | `0460d23` | 30 s / 1 retry, `LLM_TIMEOUT_S` / `LLM_MAX_RETRIES`. |
