@@ -193,14 +193,14 @@ function GroundingNote({ grounding }: { grounding?: Run["grounding"] }) {
 
 const TEMPLATES = [
   {
-    title: "Renal-safe vanilla",
-    brief: "Renal-safe scoopable vanilla ice cream, potassium ≤ 200 mg per serving",
+    title: "Renal vanilla",
+    brief: "Scoopable vanilla ice cream for a renal diet, potassium ≤ 200 mg per serving",
     modules: ["renal"],
     Icon: ShieldCheck,
   },
   {
     title: "Diabetic low-sugar",
-    brief: "Low-sugar diabetic-friendly frozen dessert with polyol sweetening",
+    brief: "Low-sugar frozen dessert for a diabetic diet, polyol-sweetened",
     modules: ["diabetic"],
     Icon: FlaskConical,
   },
@@ -245,7 +245,7 @@ function Hero({
           Constraint-verified formulation
         </p>
         <h1 className="font-heading text-3xl sm:text-[2.7rem] font-semibold text-slate-900 mt-2 leading-[1.12] tracking-[-0.015em] ff-rise ff-rise-1">
-          Frozen desserts that meet medical constraints —{" "}
+          Frozen desserts that meet dietary constraints —{" "}
           <span className="text-slate-500">verified before you see them.</span>
         </h1>
         <p className="text-sm text-slate-600 mt-3.5 max-w-xl leading-relaxed ff-rise ff-rise-2">
@@ -692,7 +692,7 @@ export default function App() {
                 void sendMessage(input, undefined, "formulate")
               }
             }}
-            placeholder="e.g. Renal-safe scoopable vanilla, K ≤ 200 mg/serving…"
+            placeholder="e.g. Scoopable vanilla for a renal diet, K ≤ 200 mg/serving…"
             className="mt-1.5 w-full rounded-xl bg-white/[0.05] border border-white/10 px-3 py-2.5 text-xs text-slate-200 placeholder:text-slate-400 resize-none focus:outline-none focus:border-teal-500/60 focus:bg-white/[0.08] transition-colors"
           />
           {loading ? (

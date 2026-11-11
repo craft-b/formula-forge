@@ -28,13 +28,13 @@ const PIPELINE = [
 const USE_CASES = [
   {
     icon: HeartPulse,
-    title: "Renal-safe",
+    title: "Renal diet",
     constraint: "K ≤ 200 · P ≤ 120 · Na ≤ 150 mg/serving",
     body: "Desserts dialysis and CKD foodservice can actually serve — potassium, phosphorus, and sodium verified per serving, not estimated.",
   },
   {
     icon: ShieldCheck,
-    title: "Diabetic-friendly",
+    title: "Diabetic diet",
     constraint: "total sugars ≤ 8 g/serving",
     body: "Polyol-sweetened structures with freezing-point physics rebalanced, so low-sugar doesn't mean freezes-like-a-brick.",
   },
@@ -262,7 +262,7 @@ export default function Landing() {
           Describe the constraint. <span className="italic text-teal-700">Get the formula.</span>
         </h2>
         <p className="text-base text-slate-600 mt-3 max-w-xl mx-auto">
-          “Renal-safe scoopable vanilla, potassium ≤ 200 mg per serving” is a complete brief.
+          “Scoopable vanilla for a renal diet, potassium ≤ 200 mg per serving” is a complete brief.
         </p>
         <div className="mt-7 flex justify-center">
           <LaunchButton>Launch the workspace</LaunchButton>

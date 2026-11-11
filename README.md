@@ -11,10 +11,10 @@ checks the result against the active dietary rulesets. It is built for formulato
 product developers doing early-stage feasibility work, where the question is not "what
 could this look like" but "does this actually meet the constraint, and can you show me."
 
-![The FormulaForge workspace: a renal-safe vanilla formulation with its compliance verdict, physical-band advisories and computed mix composition](docs/workspace.png)
+![The FormulaForge workspace: a renal-diet vanilla formulation with its compliance verdict, physical-band advisories and computed mix composition](docs/workspace.png)
 
 [Live demo](https://formula-forge-chi.vercel.app) — try a brief like
-*"formulate a renal-safe vanilla ice cream"*.
+*"formulate a vanilla ice cream for a renal diet"*.
 
 > The API is on Render's free tier and sleeps when idle, so the first request
 > after a quiet period takes about 45 seconds to cold-start. Subsequent ones
@@ -53,8 +53,10 @@ three kinds, and each is handled explicitly rather than wished away:
 - **Answers to questions** (the Q&A path, not formulation) are model prose streamed to
   the user. The prompt restricts figures to the governed rows retrieved for the question,
   but a prompt is not a guarantee, so every nutrient quantity in the answer is checked
-  against those rows afterwards ([`backend/grounding.py`](backend/grounding.py)). The UI
-  labels every answer as model-written and names any figure the library did not supply.
+  against those rows afterwards ([`backend/grounding.py`](backend/grounding.py)) — against
+  the value of the nutrient it is attributed to, so a row's potassium does not vouch for a
+  sodium figure of the same size. The UI labels every answer as model-written and names any
+  figure the library did not supply.
   These numbers are checked, not computed — they are the one place a model-authored
   figure can reach a user, and it arrives marked as such.
 
@@ -454,7 +456,11 @@ first-pass gate rate, repair recovery, constraint targeting, and whether model p
 quantities the system never computed. A full 46-brief run costs roughly 200k tokens — a
 free tier's entire daily allowance — so it runs **weekly on a stratified
 `--limit` sample**, not nightly on everything (`.github/workflows/llm-eval.yml`).
-An eval that starves the app it is measuring is not a measurement.
+An eval that starves the app it is measuring is not a measurement. Briefs are paced a few
+seconds apart (`EVAL_PACE_S`): each one is two prompts carrying the whole ingredient library,
+and back-to-back they hit the free tier's tokens-per-minute ceiling. The share of briefs the
+tier agreed to serve is reported as `provider_answered` and never gated, because a throttled
+run is a fact about the tier, not a regression in the model.
 
 ```bash
 cd backend && python -m eval.live_eval --limit 24 --gate    # cheap sample
@@ -488,7 +494,7 @@ The system as it stands, measured rather than asserted:
 | Governed ingredient library | 34 ingredients, dataset `2026.10.0`, every row with a full nutrient vector and provenance |
 | Model-authored numbers in a formulation | 0, enforced by type and pinned by test |
 | Model-authored numbers in a Q&A answer | checked against the retrieved rows; any unmatched figure is shown as unverified |
-| Domain + gate test suite | 420 tests, no live LLM, deterministic in CI |
+| Domain + gate test suite | 427 tests, no live LLM, deterministic in CI |
 | Golden compliance set | 18 brief-to-formula cases, 100% schema-valid, 100% compliance accuracy |
 | Routing eval | 46 labelled briefs, 100% intent routing, 100% ruleset activation |
 | Repairs per request | at most 1, structurally — `_resolve_formula()` has no loop |
@@ -590,7 +596,8 @@ meter; exact provider usage metadata would fix it.
 
 **Semantic retrieval.** `search_foods()` is keyword scoring with word-boundary tokenization
 over the governed library. It handles the ingredient-lookup case it is used for and avoids
-an embedding-model cold start on a free tier, but it does not do synonymy or paraphrase.
+an embedding-model cold start on a free tier, and it folds plain plurals to their singular,
+but it does not do synonymy or paraphrase.
 
 **IDDSI texture compliance.** The `dysphagia_iddsi` module is a declared stub. It advises
 and never fails, and says so in its own violation message and in `/api/meta`. Texture-modified

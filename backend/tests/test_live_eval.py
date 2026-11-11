@@ -93,6 +93,11 @@ class TestGate:
         rates = [live_eval.Rate("repair_recovery", 0, 5)]
         assert live_eval.check_gate(rates, self._baseline("repair_recovery", 10, 10)) == []
 
+    def test_provider_answered_never_gates(self):
+        """The tier throttling is not a model regression."""
+        rates = [live_eval.Rate("provider_answered", 10, 24, "")]
+        assert live_eval.check_gate(rates, self._baseline("provider_answered", 39, 41)) == []
+
 
 # ── the dataset ───────────────────────────────────────────────────────────────
 

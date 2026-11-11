@@ -202,6 +202,18 @@ def detect_iteration(message: str) -> bool:
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
 
+def _singular(word: str) -> str:
+    """'creams' -> 'cream', 'sweeteners' -> 'sweetener'; 'molasses' is left alone.
+
+    Plain English plurals only: a word of four or more letters ending in one s.
+    Applied to the question and the ingredient names alike, so "creams" finds
+    "Cream, heavy" and "which sweeteners" still reaches the role table.
+    """
+    if len(word) > 3 and word.endswith("s") and not word.endswith(("ss", "us", "is")):
+        return word[:-1]
+    return word
+
+
 def _ingredient_context_line(ing) -> str:
     """Format a governed ingredient with its real per-100 g nutrients for RAG."""
     nv = ing.nutrients_per_100g
@@ -276,6 +288,8 @@ def search_foods(query: str, n: int = 8) -> List[str]:
       it describes the target, and "ice cream" matched every cream row;
     * role words ("sweetener", "stabilizer") match the ingredients in that
       role, which share no name word with the question;
+    * plain plurals are read as their singular, so "creams" and "sweeteners"
+      match "Cream" and the sweetener role;
     * "low/high <nutrient>" (and "diabetic", for sugars) orders equally
       relevant rows by that nutrient instead of alphabetically.
 
@@ -284,6 +298,7 @@ def search_foods(query: str, n: int = 8) -> List[str]:
     """
     text = _PRODUCT_NOUN_RE.sub(" ", query.lower())
     words = {w for w in _WORD_RE.findall(text) if len(w) > 2} - _SEARCH_STOPWORDS
+    words = {_singular(w) for w in words} - _SEARCH_STOPWORDS
     wanted_roles = set().union(*(_ROLE_TERMS.get(w, frozenset()) for w in words))
     # Role words are matched through wanted_roles. Nutrient words describe what
     # every row has, so they do not identify one ("potassium in whole milk") —
@@ -296,7 +311,8 @@ def search_foods(query: str, n: int = 8) -> List[str]:
     from domain import get_repository
     scored = []
     for ing in get_repository().ingredients:
-        haystack = set(_WORD_RE.findall(f"{ing.name} {ing.role.replace('_', ' ')}".lower()))
+        haystack = {_singular(t) for t in
+                    _WORD_RE.findall(f"{ing.name} {ing.role.replace('_', ' ')}".lower())}
         score = len(name_tokens & haystack) + (2 if ing.role in wanted_roles else 0)
         if score > 0:
             scored.append((score, ing))

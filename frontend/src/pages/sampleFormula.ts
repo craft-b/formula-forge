@@ -1,4 +1,4 @@
-// Canned, physically-plausible renal-safe vanilla used by the landing page so
+// Canned, physically-plausible renal-diet vanilla used by the landing page so
 // visitors see the real FormulaReport component — not a mockup. Numbers are
 // representative display data (not engine output); the live workspace computes
 // everything from the governed library.
@@ -7,7 +7,7 @@ import type { ValidatedFormula } from "@/types/api"
 
 export const SAMPLE_FORMULA: ValidatedFormula = {
   type: "formula",
-  product_name: "Renal-Safe Vanilla — Premium Scoopable",
+  product_name: "Renal Vanilla — Premium Scoopable",
   description:
     "Scoopable vanilla for renal-diet foodservice: potassium 178 mg and phosphorus 96 mg per serving, inside renal limits with PAC in the scoopable band.",
   product_format: "premium",

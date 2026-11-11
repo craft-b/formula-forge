@@ -314,7 +314,7 @@
           "note": "cultured frozen SKUs multiplying"
         }
       ],
-      "suggested_brief": "Low-sugar frozen dessert with cultured dairy character and added fiber, diabetic-friendly sweetening",
+      "suggested_brief": "Low-sugar frozen dessert with cultured dairy character and added fiber, sweetened for a diabetic diet",
       "module_fits": [
         "diabetic"
       ]
@@ -413,7 +413,7 @@
     },
     {
       "id": "renal_safe_indulgence",
-      "title": "Renal-Safe Indulgent Line",
+      "title": "Renal-Diet Indulgent Line",
       "concept": "Institutional whitespace: genuinely indulgent frozen desserts inside renal limits — dialysis foodservice has demand and almost no premium supply.",
       "tags": [
         "medical",
@@ -438,7 +438,7 @@
           "note": "recurring 'what dessert can I actually eat' threads"
         }
       ],
-      "suggested_brief": "Renal-safe scoopable vanilla ice cream, potassium ≤ 200 mg per serving, indulgent texture",
+      "suggested_brief": "Scoopable vanilla ice cream for a renal diet, potassium ≤ 200 mg per serving, indulgent texture",
       "module_fits": [
         "renal"
       ]

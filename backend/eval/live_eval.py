@@ -250,7 +250,7 @@ def score_routing(cases: list[dict]) -> list[CaseResult]:
 
 
 def score_generation(cases: list[dict], results: list[CaseResult],
-                     repair: bool = True) -> None:
+                     repair: bool = True, pace_s: float = 0.0) -> None:
     """Run real generation for every case that should produce a formula.
 
     Uses the modules the router actually detected, not the labelled ones: the
@@ -300,6 +300,12 @@ def score_generation(cases: list[dict], results: list[CaseResult],
             result.error_kind = classify_error(result.error)
         finally:
             result.seconds = round(time.time() - started, 2)
+            # The free tier meters tokens per minute, and a formula prompt
+            # carries the whole ingredient library. Back-to-back briefs hit
+            # the ceiling and the run measures the tier instead of the model;
+            # a short pause between briefs keeps the sample under it.
+            if pace_s > 0:
+                time.sleep(pace_s)
 
 
 def _repair_feedback(validated) -> str:
@@ -436,6 +442,13 @@ def render(rates: list[Rate], results: list[CaseResult], live: bool) -> str:
 #: Below this many observations a rate is too noisy to gate on at all.
 MIN_GATE_SAMPLE = 8
 
+#: Rates that describe the provider, not the model. `provider_answered` is the
+#: share of briefs the free tier agreed to serve; it is reported so a thin
+#: sample is visible, and it is excluded from the other rates already. Gating
+#: on it fails the run whenever the tier throttles, which is the failure mode
+#: `classify_error` exists to keep out of the quality rates.
+_UNGATED = frozenset({"provider_answered"})
+
 
 def check_gate(rates: list[Rate], baseline: dict) -> list[str]:
     """Regressions relative to the recorded baseline.
@@ -457,6 +470,8 @@ def check_gate(rates: list[Rate], baseline: dict) -> list[str]:
         prior = baseline.get("rates", {}).get(rate.name)
         if prior is None:
             continue  # New metric: nothing to compare against yet.
+        if rate.name in _UNGATED:
+            continue
         if rate.n < MIN_GATE_SAMPLE:
             continue
         floor = prior.get("ci_low", prior["point"])
@@ -488,6 +503,10 @@ def main() -> int:
     parser.add_argument(
         "--seed", type=int, default=0,
         help="Changes which briefs --limit draws. Hold it fixed to compare runs.")
+    parser.add_argument(
+        "--pace", type=float, default=float(os.getenv("EVAL_PACE_S", "0")),
+        help="Seconds to wait between briefs, so a run stays under the provider's "
+        "tokens-per-minute ceiling. Defaults to EVAL_PACE_S or 0.")
     args = parser.parse_args()
 
     cases = load_cases()
@@ -526,7 +545,7 @@ def main() -> int:
 
     results = score_routing(cases)
     if live:
-        score_generation(cases, results, repair=not args.no_repair)
+        score_generation(cases, results, repair=not args.no_repair, pace_s=args.pace)
 
     rates = summarise(cases, results, live)
     report = render(rates, results, live)

@@ -205,6 +205,14 @@ class TestSearchFoods:
         # "a", "of", "in" are under 3 chars and should not affect scoring
         assert search_foods("a protein of in") == search_foods("protein")
 
+    def test_plurals_match_singular_ingredient_names(self):
+        assert search_foods("creams") == search_foods("cream")
+        assert any(line.startswith("Cream") for line in search_foods("creams"))
+
+    def test_plural_role_words_reach_the_role_table(self):
+        assert search_foods("which sweeteners") == search_foods("which sweetener")
+        assert search_foods("sweeteners") != []
+
 
 def _names(query: str, k: int) -> list[str]:
     return [line.split(":")[0] for line in search_foods(query)[:k]]

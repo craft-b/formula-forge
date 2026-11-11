@@ -40,7 +40,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.11.9"
 
       - name: Install dependencies
         working-directory: backend
@@ -57,6 +57,10 @@ jobs:
           # name. Production keeps its fallback; the measurement does not.
           ENABLE_LLM_FALLBACK: "false"
           LIMIT: ${{ inputs.limit || '24' }}
+          # Each brief is two prompts carrying the whole library; back-to-back
+          # they trip the free tier's tokens-per-minute ceiling and the run
+          # scores the tier. Pacing keeps the sample under it.
+          EVAL_PACE_S: "6"
         run: |
           python -m eval.live_eval \
             --limit "$LIMIT" \

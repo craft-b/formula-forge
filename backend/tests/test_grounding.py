@@ -48,6 +48,30 @@ class TestUngroundedQuantities:
         assert ungrounded_quantities("84 mg, which is 12% of the daily value", rows) == [
             "12% of the daily value"]
 
+    def test_a_figure_attributed_to_the_wrong_nutrient_is_ungrounded(self):
+        """K 150mg in a row does not vouch for "150 mg of sodium"."""
+        rows = ["Guar gum: 155 kcal, 5.0g protein, P 0mg, K 150mg, Na 10mg (per 100 g)"]
+        assert ungrounded_quantities("about 150 mg of sodium per 100 g", rows) == ["150 mg"]
+        assert ungrounded_quantities("sodium: 150 mg, potassium: 10 mg", rows) == [
+            "150 mg", "10 mg"]
+
+    def test_a_figure_attributed_to_the_right_nutrient_is_grounded(self):
+        rows = ["Guar gum: 155 kcal, 5.0g protein, P 0mg, K 150mg, Na 10mg (per 100 g)"]
+        assert ungrounded_quantities(
+            "Guar gum has 150 mg potassium and 10 mg sodium per 100 g, 155 kcal.", rows) == []
+
+    def test_the_nearer_nutrient_word_names_the_figure(self):
+        """The previous clause's nutrient must not claim the next figure."""
+        rows = ["Guar gum: 155 kcal, 5.0g protein, P 0mg, K 150mg, Na 10mg (per 100 g)"]
+        answer = "potassium is 150 mg per 100 g; sodium 10 mg"
+        assert ungrounded_quantities(answer, rows) == []
+
+    def test_a_figure_with_no_nutrient_named_falls_back_to_the_unit(self):
+        rows = ["Guar gum: 155 kcal, 5.0g protein, P 0mg, K 150mg, Na 10mg (per 100 g)"]
+        assert ungrounded_quantities("the row says 150 mg", rows) == []
+        assert ungrounded_quantities("the row says 151 mg", rows) == []  # within rounding
+        assert ungrounded_quantities("the row says 160 mg", rows) == ["160 mg"]
+
     def test_prose_without_figures(self):
         assert not has_quantities("Locust bean gum and guar are both good choices.")
         assert has_quantities("about 97 mg")
