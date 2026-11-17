@@ -330,12 +330,27 @@ def orchestrator(state: AgentState):
     return {"messages": state["messages"]}
 
 
+def is_product_free_question(message: str) -> bool:
+    """A question that names no product: "which sweetener has the least sugar?".
+
+    The UI sends intent "formulate" for everything typed into the brief box, so
+    that a brief the regex misses still reaches the gate. That override also
+    caught plain questions typed into the same box, and the demo's own Q&A step
+    came back as a formula. A question that names no product is not a brief by
+    any reading, so the override yields to it. A question that does name one
+    ("could you do a renal gelato?") keeps the override: a brief answered as
+    chat is validated against nothing, which is the dangerous direction.
+    """
+    return bool(_QUESTION_RE.search(message)) and not _PRODUCT_NOUN_RE.search(message)         and detect_intent(message) == "search"
+
+
 def route(state: AgentState) -> Literal["formula_agent", "rag_agent"]:
-    if state.get("intent") == "formulate":
-        return "formula_agent"
     user_messages = [m for m in state["messages"] if isinstance(m, HumanMessage)]
-    if user_messages:
-        return "formula_agent" if detect_intent(user_messages[-1].content) == "formulate" else "rag_agent"
+    text = user_messages[-1].content if user_messages else ""
+    if state.get("intent") == "formulate" and not is_product_free_question(text):
+        return "formula_agent"
+    if text:
+        return "formula_agent" if detect_intent(text) == "formulate" else "rag_agent"
     return "rag_agent"
 
 

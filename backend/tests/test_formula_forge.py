@@ -419,15 +419,34 @@ class TestRouterAndRagAgent:
         from langchain_core.messages import HumanMessage
         return {"messages": [HumanMessage(content=text)], **extra}
 
-    def test_an_explicit_intent_beats_the_text(self):
+    @pytest.mark.parametrize("brief", [
+        "renal vanilla, K under 200 per serving",
+        "Could you do a renal vanilla gelato?",
+        "what about a vegan sorbet for dialysis patients?",
+    ])
+    def test_an_explicit_intent_beats_the_text(self, brief):
         """The brief-builder sets intent directly; the regex must not override.
 
         This is the mitigation that kept F-E1 out of the primary UI path, so it
-        deserves a test of its own rather than being assumed.
+        deserves a test of its own rather than being assumed. It holds for a
+        brief the regex misses, and for a question that names a product.
         """
         import graph
-        state = self._state("what is maltodextrin", intent="formulate")
+        state = self._state(brief, intent="formulate")
         assert graph.route(state) == "formula_agent"
+
+    @pytest.mark.parametrize("question", [
+        "Which sweetener has the least sugar per 100 g, and what is its %DV?",
+        "what is maltodextrin",
+        "How much potassium is in whole milk?",
+    ])
+    def test_a_product_free_question_is_answered_despite_the_override(self, question):
+        """The brief box sends intent "formulate" for everything typed into it,
+        and the demo script's Q&A step came back as a formula. A question that
+        names no product is not a brief, so the override yields to it."""
+        import graph
+        state = self._state(question, intent="formulate")
+        assert graph.route(state) == "rag_agent"
 
     def test_a_formulation_brief_without_explicit_intent_routes_to_the_agent(self):
         import graph

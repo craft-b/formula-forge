@@ -494,7 +494,7 @@ The system as it stands, measured rather than asserted:
 | Governed ingredient library | 34 ingredients, dataset `2026.10.0`, every row with a full nutrient vector and provenance |
 | Model-authored numbers in a formulation | 0, enforced by type and pinned by test |
 | Model-authored numbers in a Q&A answer | checked against the retrieved rows; any unmatched figure is shown as unverified |
-| Domain + gate test suite | 427 tests, no live LLM, deterministic in CI |
+| Domain + gate test suite | 432 tests, no live LLM, deterministic in CI |
 | Golden compliance set | 18 brief-to-formula cases, 100% schema-valid, 100% compliance accuracy |
 | Routing eval | 46 labelled briefs, 100% intent routing, 100% ruleset activation |
 | Repairs per request | at most 1, structurally — `_resolve_formula()` has no loop |
